@@ -50,7 +50,7 @@ def verify_firebase_token(id_token: str) -> Optional[dict]:
     from firebase_admin import auth
 
     try:
-        decoded = auth.verify_id_token(id_token, check_revoked=True)
+        decoded = auth.verify_id_token(id_token, check_revoked=False)
         user_email = decoded.get("email", "").lower()
 
         return {

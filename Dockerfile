@@ -18,4 +18,4 @@ USER appuser
 ENV PATH="/home/appuser/.local/bin:$PATH"
 
 # Cloud Run injects PORT env var (default 8080)
-CMD ["sh", "-c", "uvicorn server.main:app --host 0.0.0.0 --port ${PORT:-8080}"]
+CMD ["sh", "-c", "uvicorn server.main:web_app --host 0.0.0.0 --port ${PORT:-8080}"]

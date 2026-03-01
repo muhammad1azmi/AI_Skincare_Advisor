@@ -1,10 +1,14 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:just_audio/just_audio.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import 'chat_screen.dart';
 import 'package:uuid/uuid.dart';
@@ -31,21 +35,32 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
   WebSocketService? _wsService;
   final AudioService _audioService = AudioService();
   final CameraService _cameraService = CameraService();
+  final AudioPlayer _audioPlayer = AudioPlayer();
 
   // State
+  bool _isConnecting = true;
   bool _isConnected = false;
   bool _isMuted = false;
   bool _isCameraOn = true;
   bool _aiSpeaking = false;
+  bool _permissionDenied = false;
   String _transcript = '';
   String _userTranscript = '';
   String _callStatus = 'Connecting...';
   late final String _sessionId = const Uuid().v4();
 
+  // Call timer
+  Timer? _callTimer;
+  int _callSeconds = 0;
+
   // Transcript history — collects user/AI messages for the chat screen.
   final List<ChatMessage> _chatHistory = [];
   String _partialAiTranscript = '';
   String _partialUserTranscript = '';
+
+  // Audio playback buffer for PCM chunks
+  final List<int> _audioBuffer = [];
+  bool _isPlayingAudio = false;
 
   // Streaming subscriptions
   StreamSubscription<String>? _audioSub;
@@ -65,9 +80,29 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
   }
 
   Future<void> _initializeAll() async {
+    // --- Check permissions first ---
+    final micStatus = await Permission.microphone.request();
+    final camStatus = await Permission.camera.request();
+
+    if (micStatus.isDenied || micStatus.isPermanentlyDenied) {
+      if (mounted) {
+        setState(() {
+          _permissionDenied = true;
+          _isConnecting = false;
+          _callStatus = 'Microphone permission required';
+        });
+      }
+      return;
+    }
+
     // Initialize camera (front for skin selfie).
-    await _cameraService.initialize(front: true);
-    if (mounted) setState(() {});
+    if (camStatus.isGranted) {
+      await _cameraService.initialize(front: true);
+      if (mounted) setState(() {});
+    } else {
+      // Camera denied — can still do audio-only consultation.
+      if (mounted) setState(() => _isCameraOn = false);
+    }
 
     // Connect WebSocket.
     final authService = ref.read(authServiceProvider);
@@ -83,10 +118,20 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
 
     try {
       await _wsService!.connect();
+      if (!mounted) return;
       setState(() {
         _isConnected = true;
+        _isConnecting = false;
         _callStatus = 'Connected';
       });
+
+      // Start call timer.
+      _callTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (mounted) setState(() => _callSeconds++);
+      });
+
+      // Haptic feedback on connect.
+      HapticFeedback.mediumImpact();
 
       // Listen for ADK events.
       _wsService!.events.listen((event) {
@@ -94,7 +139,6 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
           // Text content from agent (non-streaming text response)
           if (event.textContent != null && event.textContent!.isNotEmpty) {
             _transcript = event.textContent!;
-            // Add as an AI chat message
             _chatHistory.add(ChatMessage(
               content: event.textContent!,
               role: 'assistant',
@@ -102,10 +146,10 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
             ));
           }
 
-          // Audio response → AI is speaking
+          // Audio response → decode, buffer, and play
           if (event.audioBase64 != null) {
             _aiSpeaking = true;
-            // TODO: Play audio via just_audio (24kHz PCM)
+            _playAudioChunk(event.audioBase64!);
           }
 
           // Output transcription (what the AI is saying as text)
@@ -116,7 +160,6 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
             _aiSpeaking = event.outputTranscriptionFinished != true;
 
             if (event.outputTranscriptionFinished == true) {
-              // Finalize AI transcription as a chat message
               _chatHistory.add(ChatMessage(
                 content: _partialAiTranscript.trim(),
                 role: 'assistant',
@@ -133,7 +176,6 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
             _userTranscript = _partialUserTranscript;
 
             if (event.inputTranscriptionFinished == true) {
-              // Finalize user transcription as a chat message
               _chatHistory.add(ChatMessage(
                 content: _partialUserTranscript.trim(),
                 role: 'user',
@@ -161,26 +203,124 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
       // Start camera frame capture → JPEG to WebSocket.
       _startCameraStreaming();
     } catch (e) {
-      setState(() => _callStatus = 'Connection failed');
+      if (mounted) {
+        setState(() {
+          _isConnecting = false;
+          _callStatus = 'Connection failed';
+        });
+      }
       debugPrint('Failed to connect: $e');
     }
+  }
+
+  /// Play a chunk of base64-encoded PCM audio from the AI.
+  Future<void> _playAudioChunk(String base64Audio) async {
+    try {
+      final bytes = base64Decode(base64Audio);
+      _audioBuffer.addAll(bytes);
+
+      // Only start playback if not already playing — accumulate chunks.
+      if (!_isPlayingAudio && _audioBuffer.length > 4800) {
+        _isPlayingAudio = true;
+        await _flushAudioBuffer();
+      }
+    } catch (e) {
+      debugPrint('[Audio Playback] Error: $e');
+    }
+  }
+
+  /// Flush accumulated audio buffer to the player.
+  Future<void> _flushAudioBuffer() async {
+    if (_audioBuffer.isEmpty) {
+      _isPlayingAudio = false;
+      return;
+    }
+
+    try {
+      // Create WAV header for raw PCM data (24kHz, 16-bit, mono)
+      final pcmBytes = Uint8List.fromList(_audioBuffer);
+      _audioBuffer.clear();
+      final wavBytes = _createWavFromPcm(pcmBytes, 24000, 1, 16);
+
+      final source = _InMemoryAudioSource(wavBytes);
+      await _audioPlayer.setAudioSource(source);
+      await _audioPlayer.play();
+
+      // Wait for playback to finish, then flush any remaining.
+      _audioPlayer.playerStateStream.listen((state) {
+        if (state.processingState == ProcessingState.completed) {
+          _isPlayingAudio = false;
+          if (_audioBuffer.isNotEmpty) {
+            _flushAudioBuffer();
+          }
+        }
+      });
+    } catch (e) {
+      debugPrint('[Audio Playback] Flush error: $e');
+      _isPlayingAudio = false;
+    }
+  }
+
+  /// Create a minimal WAV file from raw PCM bytes.
+  Uint8List _createWavFromPcm(
+      Uint8List pcmData, int sampleRate, int channels, int bitsPerSample) {
+    final dataSize = pcmData.length;
+    final byteRate = sampleRate * channels * (bitsPerSample ~/ 8);
+    final blockAlign = channels * (bitsPerSample ~/ 8);
+    final header = ByteData(44);
+
+    // RIFF header
+    header.setUint8(0, 0x52); // R
+    header.setUint8(1, 0x49); // I
+    header.setUint8(2, 0x46); // F
+    header.setUint8(3, 0x46); // F
+    header.setUint32(4, 36 + dataSize, Endian.little);
+    header.setUint8(8, 0x57); // W
+    header.setUint8(9, 0x41); // A
+    header.setUint8(10, 0x56); // V
+    header.setUint8(11, 0x45); // E
+
+    // fmt chunk
+    header.setUint8(12, 0x66); // f
+    header.setUint8(13, 0x6d); // m
+    header.setUint8(14, 0x74); // t
+    header.setUint8(15, 0x20); // (space)
+    header.setUint32(16, 16, Endian.little); // chunk size
+    header.setUint16(20, 1, Endian.little); // PCM format
+    header.setUint16(22, channels, Endian.little);
+    header.setUint32(24, sampleRate, Endian.little);
+    header.setUint32(28, byteRate, Endian.little);
+    header.setUint16(32, blockAlign, Endian.little);
+    header.setUint16(34, bitsPerSample, Endian.little);
+
+    // data chunk
+    header.setUint8(36, 0x64); // d
+    header.setUint8(37, 0x61); // a
+    header.setUint8(38, 0x74); // t
+    header.setUint8(39, 0x61); // a
+    header.setUint32(40, dataSize, Endian.little);
+
+    // Combine header + PCM data
+    final wav = Uint8List(44 + dataSize);
+    wav.setRange(0, 44, header.buffer.asUint8List());
+    wav.setRange(44, 44 + dataSize, pcmData);
+    return wav;
+  }
+
+  String get _formattedCallTime {
+    final m = (_callSeconds ~/ 60).toString().padLeft(2, '0');
+    final s = (_callSeconds % 60).toString().padLeft(2, '0');
+    return '$m:$s';
   }
 
   void _startAudioStreaming() {
     if (_isMuted) return;
     final audioStream = _audioService.startRecording();
     _audioSub = audioStream.listen((base64Chunk) {
-      // The `record` package returns base64 but we need raw bytes
-      // for binary WebSocket frames per ADK docs.
-      // Decode base64 → Uint8List, then send as binary frame.
-      final bytes = Uint8List.fromList(
-        List<int>.from(base64Chunk.codeUnits),
-      );
-      // Note: record package provides raw PCM bytes as base64.
-      // We pass it through to the server which expects binary frames.
-      // For now, using base64 via the audio service - will need
-      // integration testing to verify the exact byte format.
-      _wsService?.sendAudioBytes(bytes);
+      // Decode base64 → raw PCM bytes, then send as binary WS frame.
+      // The `record` package returns base64-encoded PCM data.
+      final bytes = base64Decode(base64Chunk);
+      _wsService?.sendAudioBytes(Uint8List.fromList(bytes));
     });
   }
 
@@ -253,10 +393,12 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
 
   @override
   void dispose() {
+    _callTimer?.cancel();
     _stopAudioStreaming();
     _stopCameraStreaming();
     _audioService.dispose();
     _cameraService.dispose();
+    _audioPlayer.dispose();
     _pulseController.dispose();
     _wsService?.sendEnd();
     _wsService?.disconnect();
@@ -307,7 +449,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
               ),
             ),
 
-          // Top bar — status.
+          // Top bar — status + timer.
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
@@ -326,6 +468,14 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
                         const SizedBox(width: 8),
                         Text(_callStatus,
                             style: GoogleFonts.inter(color: Colors.white, fontSize: 13)),
+                        if (_isConnected) ...[
+                          const SizedBox(width: 12),
+                          Text(_formattedCallTime,
+                              style: GoogleFonts.inter(
+                                  color: Colors.white.withValues(alpha: 0.7),
+                                  fontSize: 13,
+                                  fontFeatures: [const FontFeature.tabularFigures()])),
+                        ],
                       ],
                     ),
                   ),
@@ -344,44 +494,90 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
             ),
           ),
 
-          // AI presence indicator.
+          // Modality status chips — shows See/Hear/Speak states.
+          if (_isConnected)
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 50,
+              left: 0, right: 0,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _ModalityChip(
+                    icon: Icons.visibility_rounded,
+                    label: 'Seeing',
+                    active: _isCameraOn,
+                  ),
+                  const SizedBox(width: 8),
+                  _ModalityChip(
+                    icon: Icons.hearing_rounded,
+                    label: 'Hearing',
+                    active: !_isMuted,
+                  ),
+                  const SizedBox(width: 8),
+                  _ModalityChip(
+                    icon: Icons.record_voice_over_rounded,
+                    label: 'Speaking',
+                    active: _aiSpeaking,
+                  ),
+                ],
+              ),
+            ),
+
+          // AI presence indicator + agent name.
           Positioned(
-            top: size.height * 0.35,
+            top: size.height * 0.30,
             left: 0, right: 0,
             child: Center(
-              child: AnimatedBuilder(
-                animation: _pulseController,
-                builder: (context, child) {
-                  final scale = _aiSpeaking
-                      ? 1.0 + (_pulseController.value * 0.15)
-                      : 1.0;
-                  return Transform.scale(
-                    scale: scale,
-                    child: Container(
-                      width: 100, height: 100,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: LinearGradient(
-                          colors: _aiSpeaking
-                              ? [const Color(0xFF6C63FF), const Color(0xFF00BFA5)]
-                              : [Colors.white.withValues(alpha: 0.15),
-                                 Colors.white.withValues(alpha: 0.05)],
-                        ),
-                        boxShadow: _aiSpeaking ? [
-                          BoxShadow(
-                            color: const Color(0xFF6C63FF).withValues(alpha: 0.4),
-                            blurRadius: 30, spreadRadius: 5,
+              child: Column(
+                children: [
+                  AnimatedBuilder(
+                    animation: _pulseController,
+                    builder: (context, child) {
+                      final scale = _aiSpeaking
+                          ? 1.0 + (_pulseController.value * 0.15)
+                          : 1.0;
+                      return Transform.scale(
+                        scale: scale,
+                        child: Container(
+                          width: 100, height: 100,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: LinearGradient(
+                              colors: _aiSpeaking
+                                  ? [const Color(0xFF6C63FF), const Color(0xFF00BFA5)]
+                                  : [Colors.white.withValues(alpha: 0.15),
+                                     Colors.white.withValues(alpha: 0.05)],
+                            ),
+                            boxShadow: _aiSpeaking ? [
+                              BoxShadow(
+                                color: const Color(0xFF6C63FF).withValues(alpha: 0.4),
+                                blurRadius: 30, spreadRadius: 5,
+                              ),
+                            ] : null,
                           ),
-                        ] : null,
-                      ),
-                      child: Icon(
-                        _aiSpeaking ? Icons.graphic_eq_rounded
-                            : Icons.face_retouching_natural,
-                        color: Colors.white, size: 44,
-                      ),
-                    ),
-                  );
-                },
+                          child: Icon(
+                            _aiSpeaking ? Icons.graphic_eq_rounded
+                                : Icons.face_retouching_natural,
+                            color: Colors.white, size: 44,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  Text('Glow',
+                      style: GoogleFonts.inter(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 4),
+                  Text(
+                    _aiSpeaking ? 'Speaking...' : 'Listening to you',
+                    style: GoogleFonts.inter(
+                        color: Colors.white.withValues(alpha: 0.6),
+                        fontSize: 12),
+                  ),
+                ],
               ),
             ),
           ),
@@ -467,6 +663,224 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
               ),
             ),
           ),
+          // Full-screen connection overlay.
+          if (_isConnecting)
+            Container(
+              color: Colors.black.withValues(alpha: 0.85),
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    SizedBox(
+                      width: 60, height: 60,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 3,
+                        valueColor: AlwaysStoppedAnimation(
+                          const Color(0xFF6C63FF).withValues(alpha: 0.9),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Text('Connecting to your\nAI advisor...',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.inter(
+                            color: Colors.white, fontSize: 18,
+                            fontWeight: FontWeight.w500, height: 1.4)),
+                    const SizedBox(height: 8),
+                    Text('Setting up camera, microphone & voice',
+                        style: GoogleFonts.inter(
+                            color: Colors.white.withValues(alpha: 0.5),
+                            fontSize: 13)),
+                    const SizedBox(height: 40),
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: Text('Cancel',
+                          style: GoogleFonts.inter(
+                              color: Colors.white.withValues(alpha: 0.6),
+                              fontSize: 15)),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+          // Permission denied overlay.
+          if (_permissionDenied)
+            Container(
+              color: Colors.black.withValues(alpha: 0.9),
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 40),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.mic_off_rounded, size: 64,
+                          color: Colors.red.withValues(alpha: 0.7)),
+                      const SizedBox(height: 20),
+                      Text('Permissions Required',
+                          style: GoogleFonts.inter(
+                              color: Colors.white, fontSize: 20,
+                              fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Microphone access is needed for the live consultation. '
+                        'Please enable it in your device settings.',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.inter(
+                            color: Colors.white.withValues(alpha: 0.6),
+                            fontSize: 14, height: 1.5),
+                      ),
+                      const SizedBox(height: 28),
+                      ElevatedButton(
+                        onPressed: () => openAppSettings(),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF6C63FF),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 32, vertical: 14),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16)),
+                        ),
+                        child: Text('Open Settings',
+                            style: GoogleFonts.inter(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600)),
+                      ),
+                      const SizedBox(height: 12),
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: Text('Go Back',
+                            style: GoogleFonts.inter(
+                                color: Colors.white.withValues(alpha: 0.5))),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+          // Connection failed overlay.
+          if (!_isConnecting && !_isConnected && !_permissionDenied)
+            Container(
+              color: Colors.black.withValues(alpha: 0.85),
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.wifi_off_rounded, size: 56,
+                        color: Colors.red.withValues(alpha: 0.7)),
+                    const SizedBox(height: 20),
+                    Text('Connection Failed',
+                        style: GoogleFonts.inter(
+                            color: Colors.white, fontSize: 20,
+                            fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 8),
+                    Text('Could not connect to the AI advisor',
+                        style: GoogleFonts.inter(
+                            color: Colors.white.withValues(alpha: 0.5),
+                            fontSize: 14)),
+                    const SizedBox(height: 28),
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        setState(() {
+                          _isConnecting = true;
+                          _callStatus = 'Reconnecting...';
+                        });
+                        _initializeAll();
+                      },
+                      icon: const Icon(Icons.refresh_rounded, color: Colors.white),
+                      label: Text('Retry',
+                          style: GoogleFonts.inter(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF6C63FF),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 32, vertical: 14),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16)),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: Text('Go Back',
+                          style: GoogleFonts.inter(
+                              color: Colors.white.withValues(alpha: 0.5))),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// In-memory audio source for just_audio.
+class _InMemoryAudioSource extends StreamAudioSource {
+  final Uint8List _data;
+  _InMemoryAudioSource(this._data);
+
+  @override
+  Future<StreamAudioResponse> request([int? start, int? end]) async {
+    final s = start ?? 0;
+    final e = end ?? _data.length;
+    return StreamAudioResponse(
+      sourceLength: _data.length,
+      contentLength: e - s,
+      offset: s,
+      stream: Stream.value(_data.sublist(s, e)),
+      contentType: 'audio/wav',
+    );
+  }
+}
+
+/// Compact chip showing a modality state (See / Hear / Speak).
+class _ModalityChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool active;
+
+  const _ModalityChip({
+    required this.icon,
+    required this.label,
+    required this.active,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: active
+            ? const Color(0xFF6C63FF).withValues(alpha: 0.6)
+            : Colors.white.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: active
+              ? const Color(0xFF6C63FF).withValues(alpha: 0.8)
+              : Colors.white.withValues(alpha: 0.15),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon,
+              size: 14,
+              color: active
+                  ? Colors.white
+                  : Colors.white.withValues(alpha: 0.4)),
+          const SizedBox(width: 4),
+          Text(label,
+              style: GoogleFonts.inter(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: active
+                      ? Colors.white
+                      : Colors.white.withValues(alpha: 0.4))),
         ],
       ),
     );

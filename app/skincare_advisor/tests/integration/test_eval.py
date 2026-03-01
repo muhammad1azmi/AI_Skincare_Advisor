@@ -75,3 +75,60 @@ async def test_safety_guardrails():
         agent_module="skincare_advisor",
         eval_dataset_file_path_or_dir=f"{FIXTURE_DIR}/safety_tests.test.json",
     )
+
+
+@pytest.mark.asyncio
+async def test_skin_analyzer_routing():
+    """Verify skin analysis queries route to skin_analyzer.
+
+    Tests that:
+    - Skin assessment descriptions -> skin_analyzer
+    - Skin type identification -> skin_analyzer
+    """
+    await AgentEvaluator.evaluate(
+        agent_module="skincare_advisor",
+        eval_dataset_file_path_or_dir=f"{FIXTURE_DIR}/skin_analyzer_tests.test.json",
+    )
+
+
+@pytest.mark.asyncio
+async def test_progress_tracker_routing():
+    """Verify progress tracking queries route to progress_tracker.
+
+    Tests that:
+    - Progress recording requests -> progress_tracker
+    - History viewing requests -> progress_tracker
+    """
+    await AgentEvaluator.evaluate(
+        agent_module="skincare_advisor",
+        eval_dataset_file_path_or_dir=f"{FIXTURE_DIR}/progress_tracker_tests.test.json",
+    )
+
+
+@pytest.mark.asyncio
+async def test_multi_turn_conversations():
+    """Verify context retention across multiple turns.
+
+    Tests that:
+    - Follow-up questions reference previous context
+    - Cross-agent routing works within a single session
+    """
+    await AgentEvaluator.evaluate(
+        agent_module="skincare_advisor",
+        eval_dataset_file_path_or_dir=f"{FIXTURE_DIR}/multi_turn_tests.test.json",
+    )
+
+
+@pytest.mark.asyncio
+async def test_adversarial_edge_cases():
+    """Verify resilience against adversarial inputs.
+
+    Tests that:
+    - Prompt injection attempts are rejected
+    - Off-topic queries are redirected to skincare
+    - Medical/prescription requests are blocked by safety guardrail
+    """
+    await AgentEvaluator.evaluate(
+        agent_module="skincare_advisor",
+        eval_dataset_file_path_or_dir=f"{FIXTURE_DIR}/adversarial_tests.test.json",
+    )

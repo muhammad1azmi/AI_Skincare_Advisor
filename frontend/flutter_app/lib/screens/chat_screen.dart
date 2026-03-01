@@ -37,10 +37,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   final _scrollController = ScrollController();
   final List<ChatMessage> _messages = [];
   WebSocketService? _wsService;
+  bool _isConnecting = false;
   bool _isConnected = false;
   bool _isTyping = false;
   String _partialTranscript = '';
   String? _sessionId;
+  String? _connectionError;
 
   @override
   void initState() {
@@ -55,13 +57,28 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           setState(() => _messages.addAll(initialMessages));
           _scrollToBottom();
         }
+        // Pre-fill message from Quick Actions.
+        final prefill = args['prefill'] as String?;
+        if (prefill != null && prefill.isNotEmpty) {
+          _controller.text = prefill;
+          // Auto-send after a short delay for UX polish.
+          Future.delayed(const Duration(milliseconds: 300), () {
+            if (mounted) _sendMessage();
+          });
+        }
       }
       _sessionId ??= const Uuid().v4();
-      _connect();
+      // Don't connect yet — lazy connect on first message.
     });
   }
 
-  Future<void> _connect() async {
+  Future<void> _ensureConnected() async {
+    if (_isConnected || _isConnecting) return;
+    setState(() {
+      _isConnecting = true;
+      _connectionError = null;
+    });
+
     final authService = ref.read(authServiceProvider);
     final user = authService.currentUser;
     final userId = user?.uid ?? 'guest_${const Uuid().v4().substring(0, 8)}';
@@ -75,7 +92,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
     try {
       await _wsService!.connect();
-      setState(() => _isConnected = true);
+      if (!mounted) return;
+      setState(() {
+        _isConnected = true;
+        _isConnecting = false;
+      });
 
       // Listen for ADK events from the server.
       _wsService!.events.listen((event) {
@@ -98,7 +119,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           setState(() {
             _partialTranscript += event.outputTranscriptionText!;
             if (event.outputTranscriptionFinished == true) {
-              // Finalize transcription as a message
               _isTyping = false;
               _messages.add(ChatMessage(
                 content: _partialTranscript.trim(),
@@ -116,24 +136,46 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           setState(() => _isTyping = false);
         }
       }, onError: (e) {
-        setState(() => _isConnected = false);
+        setState(() {
+          _isConnected = false;
+          _isConnecting = false;
+        });
       });
     } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isConnecting = false;
+          _connectionError = 'Could not connect. Tap send to retry.';
+        });
+      }
       debugPrint('WebSocket connection failed: $e');
     }
   }
 
-  void _sendMessage() {
+  Future<void> _sendMessage() async {
     final text = _controller.text.trim();
-    if (text.isEmpty || _wsService == null) return;
+    if (text.isEmpty) return;
 
+    // Add user message immediately for responsive feel.
     setState(() {
       _messages.add(ChatMessage(content: text, role: 'user'));
       _isTyping = true;
+      _connectionError = null;
     });
     _controller.clear();
-    _wsService!.sendText(text);
     _scrollToBottom();
+
+    // Lazy connect on first message.
+    if (!_isConnected) {
+      await _ensureConnected();
+      if (!_isConnected) {
+        // Connection failed — revert typing state.
+        setState(() => _isTyping = false);
+        return;
+      }
+    }
+
+    _wsService!.sendText(text);
   }
 
   void _scrollToBottom() {
@@ -162,7 +204,33 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Chat with Advisor'),
+        title: Row(
+          children: [
+            Container(
+              width: 32, height: 32,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  colors: [Color(0xFF6C63FF), Color(0xFF00BFA5)],
+                ),
+              ),
+              child: const Icon(Icons.face_retouching_natural,
+                  color: Colors.white, size: 18),
+            ),
+            const SizedBox(width: 10),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Glow', style: GoogleFonts.inter(
+                    fontSize: 16, fontWeight: FontWeight.w600)),
+                Text('AI Skincare Advisor',
+                    style: GoogleFonts.inter(
+                        fontSize: 11,
+                        color: theme.colorScheme.onSurfaceVariant)),
+              ],
+            ),
+          ],
+        ),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 16),
@@ -173,6 +241,41 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       ),
       body: Column(
         children: [
+          // Connection status banner.
+          if (_isConnecting)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              color: theme.colorScheme.primary.withValues(alpha: 0.1),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  SizedBox(
+                    width: 14, height: 14,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text('Connecting to advisor...',
+                      style: GoogleFonts.inter(
+                          fontSize: 13,
+                          color: theme.colorScheme.primary)),
+                ],
+              ),
+            ),
+          if (_connectionError != null)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+              color: theme.colorScheme.error.withValues(alpha: 0.1),
+              child: Text(_connectionError!,
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(
+                      fontSize: 13,
+                      color: theme.colorScheme.error)),
+            ),
           Expanded(
             child: _messages.isEmpty
                 ? _buildEmptyState(theme)
@@ -197,10 +300,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.chat_bubble_outline_rounded, size: 64,
+          Icon(Icons.face_retouching_natural, size: 64,
               color: theme.colorScheme.primary.withValues(alpha: 0.3)),
           const SizedBox(height: 16),
-          Text('Start a conversation',
+          Text('Chat with Glow',
               style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w600,
                   color: theme.colorScheme.onSurfaceVariant)),
           const SizedBox(height: 8),
@@ -252,7 +355,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               onSubmitted: (text) => _sendMessage(),
               textInputAction: TextInputAction.send,
               decoration: InputDecoration(
-                hintText: 'Type your question...',
+                hintText: 'Ask Glow anything...',
                 hintStyle: GoogleFonts.inter(fontSize: 15),
                 filled: true,
                 fillColor: theme.colorScheme.surfaceContainerLow,

@@ -3,15 +3,17 @@
 This server implements the ADK Gemini Live API Bidi-Streaming lifecycle
 for real-time voice/video skincare consultations.
 
-Security:
+Architecture:
+- ADK App with BigQuery Agent Analytics Plugin for observability
+- OpenTelemetry distributed tracing (trace_id, span_id)
 - Firebase Auth JWT verification on WebSocket connections
 - CORS restricted to allowed origins only
 - No secrets in code (all from env vars)
 - Non-root container user (Dockerfile)
 - VertexAiSessionService for persistent, managed sessions
 
-4-Phase Lifecycle:
-1. App Init — Create Agent, SessionService, Runner
+5-Phase Lifecycle:
+1. App Init — Create Agent, App (w/ BQ plugin), Runner
 2. Auth — Verify Firebase JWT on WebSocket connect
 3. Session Init — Create/get session, RunConfig, LiveRequestQueue
 4. Bidi-Streaming — Concurrent upstream/downstream WebSocket tasks
@@ -21,6 +23,7 @@ Security:
 import asyncio
 import base64
 import json
+import logging
 import os
 import traceback
 
@@ -34,11 +37,20 @@ load_dotenv(os.path.join(_root_dir, "app", ".env"))
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
-from google.adk.runners import Runner
+from google.adk.apps import App
 from google.adk.agents.run_config import RunConfig, StreamingMode
 from google.adk.sessions import VertexAiSessionService
 from google.adk.agents.live_request_queue import LiveRequestQueue
+from google.adk.plugins.bigquery_agent_analytics_plugin import (
+    BigQueryAgentAnalyticsPlugin,
+    BigQueryLoggerConfig,
+)
 from google.genai import types
+
+# OpenTelemetry — enables distributed tracing in BigQuery logs
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
+trace.set_tracer_provider(TracerProvider())
 
 # Import the root agent and auth module
 import sys
@@ -46,8 +58,15 @@ sys.path.insert(0, os.path.join(_root_dir, "app"))
 from skincare_advisor.agent import root_agent
 from server.auth import verify_websocket_token
 
+# --- Structured Logging ---
+logging.basicConfig(
+    level=logging.INFO,
+    format='{"time":"%(asctime)s","level":"%(levelname)s","module":"%(module)s","message":"%(message)s"}',
+)
+logger = logging.getLogger("skincare_advisor")
+
 # --- Phase 1: App Initialization ---
-app = FastAPI(
+web_app = FastAPI(
     title="AI Skincare Advisor",
     description="Real-time multimodal skincare consultation via Gemini Live API",
     version="1.0.0",
@@ -61,7 +80,7 @@ _ALLOWED_ORIGINS = os.environ.get(
     "http://localhost:3000,http://localhost:8080",
 ).split(",")
 
-app.add_middleware(
+web_app.add_middleware(
     CORSMiddleware,
     allow_origins=_ALLOWED_ORIGINS,
     allow_credentials=True,
@@ -69,19 +88,48 @@ app.add_middleware(
     allow_headers=["Content-Type", "Authorization"],
 )
 
+# --- BigQuery Agent Analytics Plugin ---
+_PROJECT_ID = os.environ.get("GOOGLE_CLOUD_PROJECT", "boreal-graph-465506-f2")
+_LOCATION = os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1")
+
+bq_config = BigQueryLoggerConfig(
+    enabled=True,
+    gcs_bucket_name=os.environ.get("GCS_BUCKET_NAME"),
+    log_multi_modal_content=True,
+    max_content_length=500 * 1024,  # 500 KB limit for inline text
+    batch_size=1,                   # Low latency (increase for high throughput)
+    shutdown_timeout=10.0,
+    custom_tags={
+        "env": os.environ.get("ENV", "dev"),
+        "version": "1.0.0",
+    },
+    log_session_metadata=True,
+)
+bq_plugin = BigQueryAgentAnalyticsPlugin(
+    project_id=_PROJECT_ID,
+    dataset_id=os.environ.get("BQ_DATASET_ID", "adk_agent_logs"),
+    table_id="agent_events_ai_skincare_advisor",
+    config=bq_config,
+    location=_LOCATION,
+)
+
 # Session service — Vertex AI Agent Engine managed sessions
 session_service = VertexAiSessionService(
-    project=os.environ.get("GOOGLE_CLOUD_PROJECT", "boreal-graph-465506-f2"),
-    location=os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1"),
+    project=_PROJECT_ID,
+    location=_LOCATION,
     agent_engine_id=os.environ.get("AGENT_ENGINE_ID"),
 )
 
-# Runner manages agent execution
-runner = Runner(
-    agent=root_agent,
-    app_name="skincare_advisor",
+# ADK App with BigQuery Analytics plugin (replaces raw Runner)
+adk_app = App(
+    name="skincare_advisor",
+    root_agent=root_agent,
+    plugins=[bq_plugin],
     session_service=session_service,
 )
+runner = adk_app.runner
+
+logger.info("ADK App initialized with BigQuery Agent Analytics plugin")
 
 # Track active streaming sessions
 active_queues: dict[str, LiveRequestQueue] = {}
@@ -90,7 +138,7 @@ active_queues: dict[str, LiveRequestQueue] = {}
 fcm_tokens: dict[str, str] = {}  # user_id -> fcm_token
 
 
-@app.get("/")
+@web_app.get("/")
 async def health_check():
     """Health check endpoint."""
     return {
@@ -111,7 +159,7 @@ async def health_check():
     }
 
 
-@app.post("/api/register-token")
+@web_app.post("/api/register-token")
 async def register_fcm_token(data: dict):
     """Register a device FCM token for push notifications.
 
@@ -122,11 +170,11 @@ async def register_fcm_token(data: dict):
     if not user_id or not token:
         return {"error": "user_id and token required"}, 400
     fcm_tokens[user_id] = token
-    print(f"[FCM] Registered token for user {user_id}")
+    logger.info(f"FCM token registered for user {user_id}")
     return {"status": "ok"}
 
 
-@app.post("/api/send-notification")
+@web_app.post("/api/send-notification")
 async def send_push_notification(data: dict):
     """Send a push notification to a user.
 
@@ -148,7 +196,7 @@ async def send_push_notification(data: dict):
     return {"status": "sent" if result else "failed"}
 
 
-@app.websocket("/ws/{user_id}/{session_id}")
+@web_app.websocket("/ws/{user_id}/{session_id}")
 async def websocket_streaming(websocket: WebSocket, user_id: str, session_id: str):
     """WebSocket endpoint for Gemini Live API bidi-streaming.
 
@@ -178,7 +226,7 @@ async def websocket_streaming(websocket: WebSocket, user_id: str, session_id: st
     authenticated_user_id = firebase_user["uid"]
 
     await websocket.accept()
-    print(f"[Session {session_id}] WebSocket connected for user {authenticated_user_id} ({firebase_user.get('email', '')})")
+    logger.info(f"Session {session_id}: WebSocket connected for user {authenticated_user_id} ({firebase_user.get('email', '')})")
 
     # --- Phase 3: Session Initialization ---
     session = await session_service.get_session(
@@ -192,9 +240,9 @@ async def websocket_streaming(websocket: WebSocket, user_id: str, session_id: st
             user_id=authenticated_user_id,
             session_id=session_id,
         )
-        print(f"[Session {session_id}] Created new session")
+        logger.info(f"Session {session_id}: Created new session")
     else:
-        print(f"[Session {session_id}] Resumed existing session")
+        logger.info(f"Session {session_id}: Resumed existing session")
 
     # Create LiveRequestQueue for this session (in async context per ADK best practice)
     live_request_queue = LiveRequestQueue()
@@ -203,7 +251,7 @@ async def websocket_streaming(websocket: WebSocket, user_id: str, session_id: st
     # Configure for bidi-streaming with audio + text responses
     # Per ADK docs: use StreamingMode.BIDI for bidirectional streaming
     run_config = RunConfig(
-        response_modalities=["AUDIO", "TEXT"],
+        response_modalities=["AUDIO"],
         streaming_mode=StreamingMode.BIDI,
         speech_config=types.SpeechConfig(
             voice_config=types.VoiceConfig(
@@ -214,7 +262,7 @@ async def websocket_streaming(websocket: WebSocket, user_id: str, session_id: st
         ),
     )
 
-    print(f"[Session {session_id}] User: {firebase_user.get('name', authenticated_user_id)}")
+    logger.info(f"Session {session_id}: User: {firebase_user.get('name', authenticated_user_id)}")
 
     # --- Phase 4: Bidi-Streaming ---
     async def upstream_task():
@@ -270,9 +318,9 @@ async def websocket_streaming(websocket: WebSocket, user_id: str, session_id: st
                         break
 
         except WebSocketDisconnect:
-            print(f"[Session {session_id}] Client disconnected (upstream)")
+            logger.info(f"Session {session_id}: Client disconnected (upstream)")
         except Exception as e:
-            print(f"[Session {session_id}] Upstream error: {e}")
+            logger.error(f"Session {session_id}: Upstream error: {e}")
             traceback.print_exc()
 
     async def downstream_task():
@@ -284,7 +332,8 @@ async def websocket_streaming(websocket: WebSocket, user_id: str, session_id: st
         """
         try:
             async for event in runner.run_live(
-                session=session,
+                user_id=authenticated_user_id,
+                session_id=session_id,
                 live_request_queue=live_request_queue,
                 run_config=run_config,
             ):
@@ -298,28 +347,27 @@ async def websocket_streaming(websocket: WebSocket, user_id: str, session_id: st
                 await websocket.send_text(event_json)
 
         except WebSocketDisconnect:
-            print(f"[Session {session_id}] Client disconnected (downstream)")
+            logger.info(f"Session {session_id}: Client disconnected (downstream)")
         except Exception as e:
-            print(f"[Session {session_id}] Downstream error: {e}")
-            traceback.print_exc()
+            logger.error(f"Session {session_id}: Downstream error: {e}", exc_info=True)
 
     # Run upstream and downstream concurrently
     try:
         await asyncio.gather(upstream_task(), downstream_task())
     except Exception as e:
-        print(f"[Session {session_id}] Session error: {e}")
+        logger.error(f"Session {session_id}: Session error: {e}", exc_info=True)
     finally:
         # --- Phase 5: Cleanup ---
         # Per ADK docs: Always close the queue to prevent zombie sessions
         live_request_queue.close()
         active_queues.pop(session_id, None)
-        print(f"[Session {session_id}] Session cleaned up")
+        logger.info(f"Session {session_id}: Session cleaned up")
 
 
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
-        app,
+        web_app,
         host="0.0.0.0",
         port=int(os.environ.get("PORT", 8080)),
     )

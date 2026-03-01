@@ -83,7 +83,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             title: 'Live Consultation',
             subtitle: 'Video-call with AI advisor\nusing camera & voice',
             gradient: const [Color(0xFF6C63FF), Color(0xFF9B8FFF)],
-            onTap: () => Navigator.pushNamed(context, AppRoutes.consultation),
+            onTap: () => Navigator.pushNamed(context, AppRoutes.consultationLobby),
           ).animate().fadeIn(delay: 200.ms, duration: 500.ms).slideY(begin: 0.1),
           const SizedBox(height: 16),
           _ActionCard(
@@ -106,7 +106,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 child: _QuickAction(
                   icon: Icons.camera_alt_outlined,
                   label: 'Scan\nProduct',
-                  onTap: () => Navigator.pushNamed(context, AppRoutes.chat),
+                  onTap: () => Navigator.pushNamed(
+                    context,
+                    AppRoutes.chat,
+                    arguments: {
+                      'prefill': 'I want to scan a skincare product. '
+                          'Please help me analyze its ingredients.',
+                    },
+                  ),
                 ),
               ),
               const SizedBox(width: 12),
@@ -122,7 +129,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 child: _QuickAction(
                   icon: Icons.lightbulb_outline,
                   label: 'Skincare\nTips',
-                  onTap: () => Navigator.pushNamed(context, AppRoutes.chat),
+                  onTap: () => Navigator.pushNamed(
+                    context,
+                    AppRoutes.chat,
+                    arguments: {
+                      'prefill': 'Give me some personalized skincare tips '
+                          'for my daily routine.',
+                    },
+                  ),
                 ),
               ),
             ],

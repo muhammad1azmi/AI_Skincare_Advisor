@@ -1,0 +1,49 @@
+name: Agent Eval Tests
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'server/**'
+      - 'requirements.txt'
+  workflow_dispatch:
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Run ADK Eval Tests
+        env:
+          GOOGLE_CLOUD_PROJECT: boreal-graph-465506-f2
+          GOOGLE_CLOUD_LOCATION: us-central1
+          GOOGLE_GENAI_USE_VERTEXAI: "TRUE"
+        run: |
+          pytest app/skincare_advisor/tests/integration/test_eval.py -v \
+            --tb=short \
+            2>&1 | tee eval_output.txt
+
+      - name: Upload eval results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results-${{ github.run_number }}
+          path: eval_output.txt
+          retention-days: 30

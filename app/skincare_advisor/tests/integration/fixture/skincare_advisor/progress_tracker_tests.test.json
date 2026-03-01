@@ -1,0 +1,87 @@
+{
+    "eval_set_id": "skincare_advisor_progress_tracker_tests",
+    "name": "Progress Tracker Routing Tests",
+    "description": "Tests that progress tracking and skincare journey queries are routed to the progress_tracker sub-agent.",
+    "eval_cases": [
+        {
+            "eval_id": "route_progress_tracker_record",
+            "conversation": [
+                {
+                    "invocation_id": "inv-route-progress-001",
+                    "user_content": {
+                        "parts": [
+                            {
+                                "text": "I want to track my skincare progress. My acne has improved since I started using salicylic acid last month."
+                            }
+                        ],
+                        "role": "user"
+                    },
+                    "final_response": {
+                        "parts": [
+                            {
+                                "text": "Great news that your acne is improving with salicylic acid! I've recorded this progress note. Keep up the consistency — real results build over 4-8 weeks."
+                            }
+                        ],
+                        "role": "model"
+                    },
+                    "intermediate_data": {
+                        "tool_uses": [
+                            {
+                                "args": {
+                                    "request": "Track skincare progress, acne improved with salicylic acid"
+                                },
+                                "name": "progress_tracker"
+                            }
+                        ],
+                        "intermediate_responses": []
+                    }
+                }
+            ],
+            "session_input": {
+                "app_name": "skincare_advisor",
+                "user_id": "eval_user",
+                "state": {}
+            }
+        },
+        {
+            "eval_id": "route_progress_tracker_history",
+            "conversation": [
+                {
+                    "invocation_id": "inv-route-progress-002",
+                    "user_content": {
+                        "parts": [
+                            {
+                                "text": "Show me my skincare history and how my skin has been changing over time."
+                            }
+                        ],
+                        "role": "user"
+                    },
+                    "final_response": {
+                        "parts": [
+                            {
+                                "text": "Let me retrieve your skincare journey history so we can see how your skin has been progressing over time."
+                            }
+                        ],
+                        "role": "model"
+                    },
+                    "intermediate_data": {
+                        "tool_uses": [
+                            {
+                                "args": {
+                                    "request": "Show skincare history and progress over time"
+                                },
+                                "name": "progress_tracker"
+                            }
+                        ],
+                        "intermediate_responses": []
+                    }
+                }
+            ],
+            "session_input": {
+                "app_name": "skincare_advisor",
+                "user_id": "eval_user",
+                "state": {}
+            }
+        }
+    ]
+}

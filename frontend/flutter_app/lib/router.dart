@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'screens/home_screen.dart';
 import 'screens/chat_screen.dart';
 import 'screens/consultation_screen.dart';
+import 'screens/consultation_lobby_screen.dart';
 import 'screens/history_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/login_screen.dart';
@@ -14,6 +15,7 @@ class AppRoutes {
   static const String login = '/login';
   static const String home = '/';
   static const String chat = '/chat';
+  static const String consultationLobby = '/consultation-lobby';
   static const String consultation = '/consultation';
   static const String history = '/history';
   static const String profile = '/profile';
@@ -31,6 +33,8 @@ class AppRouter {
         return _fade(const HomeScreen(), settings);
       case AppRoutes.chat:
         return _slide(const ChatScreen(), settings);
+      case AppRoutes.consultationLobby:
+        return _slide(const ConsultationLobbyScreen(), settings);
       case AppRoutes.consultation:
         return _slide(const ConsultationScreen(), settings);
       case AppRoutes.history:

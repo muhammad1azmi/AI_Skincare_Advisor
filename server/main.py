@@ -138,24 +138,44 @@ active_queues: dict[str, LiveRequestQueue] = {}
 fcm_tokens: dict[str, str] = {}  # user_id -> fcm_token
 
 
+@web_app.on_event("shutdown")
+async def shutdown_event():
+    """Graceful shutdown — close all active LiveRequestQueues."""
+    logger.info(f"Shutting down: closing {len(active_queues)} active session(s)")
+    for sid, queue in list(active_queues.items()):
+        try:
+            queue.close()
+            logger.info(f"Session {sid}: closed on shutdown")
+        except Exception:
+            pass
+    active_queues.clear()
+
+
 @web_app.get("/")
 async def health_check():
-    """Health check endpoint."""
+    """Enriched health check — verifies system readiness."""
     return {
         "status": "healthy",
         "app": "AI Skincare Advisor",
         "version": "1.0.0",
+        "model": root_agent.model,
+        "session_service": "VertexAiSessionService",
+        "agent_engine_id": os.environ.get("AGENT_ENGINE_ID", "not_set"),
+        "plugins": ["BigQueryAgentAnalyticsPlugin"],
+        "active_sessions": len(active_queues),
         "agents": [
-            "skincare_advisor (root)",
-            "skin_analyzer",
-            "routine_builder",
-            "ingredient_checker",
-            "ingredient_interaction_agent",
-            "skin_condition_agent",
-            "qa_agent",
-            "kol_content_agent",
-            "progress_tracker",
+            "skincare_advisor (root orchestrator)",
+            "skin_analyzer (vision + FunctionTool)",
+            "routine_builder (VertexAiSearchTool)",
+            "ingredient_checker (VertexAiSearchTool)",
+            "ingredient_interaction_agent (VertexAiSearchTool)",
+            "skin_condition_agent (VertexAiSearchTool)",
+            "qa_agent (VertexAiSearchTool)",
+            "kol_content_agent (VertexAiSearchTool)",
+            "progress_tracker (FunctionTool)",
         ],
+        "grounding": "Vertex AI Search datastores (5 agents)",
+        "safety": "before_model_callback medical guardrail",
     }
 
 
@@ -292,30 +312,60 @@ async def websocket_streaming(websocket: WebSocket, user_id: str, session_id: st
                 elif "text" in message:
                     # Text frame = JSON message
                     text_data = message["text"]
-                    json_message = json.loads(text_data)
+                    try:
+                        json_message = json.loads(text_data)
+                    except json.JSONDecodeError:
+                        logger.warning(f"Session {session_id}: Malformed JSON from client")
+                        await websocket.send_text(json.dumps({
+                            "error": "invalid_json",
+                            "message": "Message must be valid JSON",
+                        }))
+                        continue
 
-                    if json_message.get("type") == "text":
+                    msg_type = json_message.get("type")
+                    if not msg_type:
+                        logger.warning(f"Session {session_id}: Missing 'type' field")
+                        await websocket.send_text(json.dumps({
+                            "error": "missing_type",
+                            "message": "Message must include a 'type' field",
+                        }))
+                        continue
+
+                    if msg_type == "text":
                         # Text message → send_content for turn-by-turn
+                        user_text = json_message.get("text", "").strip()
+                        if not user_text:
+                            continue  # ignore empty messages
                         content = types.Content(
                             role="user",
-                            parts=[types.Part(text=json_message["text"])],
+                            parts=[types.Part(text=user_text)],
                         )
                         live_request_queue.send_content(content)
 
-                    elif json_message.get("type") == "image":
+                    elif msg_type == "image":
                         # Image frame (base64 JPEG) → send_realtime(Blob)
                         # Per ADK docs: Do NOT use send_content with inline_data
-                        image_data = base64.b64decode(json_message["data"])
+                        raw_data = json_message.get("data")
+                        if not raw_data:
+                            continue  # ignore empty image frames
+                        image_data = base64.b64decode(raw_data)
                         image_blob = types.Blob(
                             mime_type=json_message.get("mimeType", "image/jpeg"),
                             data=image_data,
                         )
                         live_request_queue.send_realtime(image_blob)
 
-                    elif json_message.get("type") == "end":
+                    elif msg_type == "end":
                         # Client signals end of conversation
                         live_request_queue.close()
                         break
+
+                    else:
+                        logger.warning(f"Session {session_id}: Unknown type '{msg_type}'")
+                        await websocket.send_text(json.dumps({
+                            "error": "unknown_type",
+                            "message": f"Unknown message type: {msg_type}",
+                        }))
 
         except WebSocketDisconnect:
             logger.info(f"Session {session_id}: Client disconnected (upstream)")
@@ -350,12 +400,27 @@ async def websocket_streaming(websocket: WebSocket, user_id: str, session_id: st
             logger.info(f"Session {session_id}: Client disconnected (downstream)")
         except Exception as e:
             logger.error(f"Session {session_id}: Downstream error: {e}", exc_info=True)
+            # Notify client of the error before the connection closes
+            try:
+                await websocket.send_text(json.dumps({
+                    "error": "server_error",
+                    "message": "An internal error occurred. Please reconnect.",
+                }))
+            except Exception:
+                pass  # Client may already be disconnected
 
     # Run upstream and downstream concurrently
     try:
         await asyncio.gather(upstream_task(), downstream_task())
     except Exception as e:
         logger.error(f"Session {session_id}: Session error: {e}", exc_info=True)
+        try:
+            await websocket.send_text(json.dumps({
+                "error": "session_error",
+                "message": "Session encountered an error. Please try again.",
+            }))
+        except Exception:
+            pass
     finally:
         # --- Phase 5: Cleanup ---
         # Per ADK docs: Always close the queue to prevent zombie sessions

@@ -40,12 +40,25 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   bool _isConnected = false;
   bool _isTyping = false;
   String _partialTranscript = '';
-  late final String _sessionId = const Uuid().v4();
+  String? _sessionId;
 
   @override
   void initState() {
     super.initState();
-    _connect();
+    // Defer route argument reading to after the first frame.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final args = ModalRoute.of(context)?.settings.arguments;
+      if (args is Map<String, dynamic>) {
+        _sessionId = args['sessionId'] as String?;
+        final initialMessages = args['initialMessages'] as List<ChatMessage>?;
+        if (initialMessages != null && initialMessages.isNotEmpty) {
+          setState(() => _messages.addAll(initialMessages));
+          _scrollToBottom();
+        }
+      }
+      _sessionId ??= const Uuid().v4();
+      _connect();
+    });
   }
 
   Future<void> _connect() async {
@@ -56,7 +69,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
     _wsService = WebSocketService(
       userId: userId,
-      sessionId: _sessionId,
+      sessionId: _sessionId!,
       authToken: token,
     );
 

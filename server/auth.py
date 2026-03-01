@@ -13,13 +13,6 @@ from fastapi import WebSocket
 
 logger = logging.getLogger(__name__)
 
-# Email allowlist — only these users can connect.
-# Set via ALLOWED_EMAILS env var (comma-separated) or defaults below.
-_ALLOWED_EMAILS = os.environ.get(
-    "ALLOWED_EMAILS",
-    "muhammad@borobudur.ai",
-).lower().split(",")
-
 # Lazy-init Firebase Admin SDK
 _firebase_app = None
 
@@ -59,11 +52,6 @@ def verify_firebase_token(id_token: str) -> Optional[dict]:
     try:
         decoded = auth.verify_id_token(id_token, check_revoked=True)
         user_email = decoded.get("email", "").lower()
-
-        # Check email allowlist
-        if user_email not in _ALLOWED_EMAILS:
-            logger.warning(f"Access denied for email: {user_email}")
-            return None
 
         return {
             "uid": decoded["uid"],

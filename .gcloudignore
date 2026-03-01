@@ -1,26 +1,15 @@
-# Only include what's needed for the Flutter APK build
-# Ignore pattern: everything NOT in frontend/flutter_app
+# .gcloudignore — optimized for Cloud Run backend deployment.
+# APK builds now use GitHub Actions (not Cloud Build).
 
-# Large directories
+# Virtual environments
 .venv/
 __pycache__/
 *.pyc
+*.egg-info/
+dist/
 
 # Version control
 .git/
-.gitignore
-
-# Secrets
-.env
-
-# Python/Server (not needed for Flutter build)
-app/
-eval/
-evals/
-server/
-tests/
-*.egg-info/
-dist/
 
 # IDE
 .idea/
@@ -28,19 +17,19 @@ dist/
 *.iml
 .gemini/
 
-# Flutter build caches (regenerated during build)
-frontend/flutter_app/.dart_tool/
-frontend/flutter_app/build/
-frontend/flutter_app/android/.gradle/
-frontend/flutter_app/ios/Pods/
+# Flutter frontend (not needed for backend)
+frontend/
 
 # Node
 node_modules/
+
+# Cloud Build configs (not needed for Cloud Run source deploy)
+cloudbuild*.yaml
 
 # Misc
 *.log
 .DS_Store
 Thumbs.db
 
-# Docker (not needed)
-Dockerfile*
+# GitHub Actions
+.github/

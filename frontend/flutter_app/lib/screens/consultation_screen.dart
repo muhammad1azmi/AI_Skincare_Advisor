@@ -5,6 +5,8 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+
+import 'chat_screen.dart';
 import 'package:uuid/uuid.dart';
 
 import '../services/auth_service.dart';
@@ -39,6 +41,11 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
   String _userTranscript = '';
   String _callStatus = 'Connecting...';
   late final String _sessionId = const Uuid().v4();
+
+  // Transcript history — collects user/AI messages for the chat screen.
+  final List<ChatMessage> _chatHistory = [];
+  String _partialAiTranscript = '';
+  String _partialUserTranscript = '';
 
   // Streaming subscriptions
   StreamSubscription<String>? _audioSub;
@@ -84,9 +91,15 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
       // Listen for ADK events.
       _wsService!.events.listen((event) {
         setState(() {
-          // Text content from agent
+          // Text content from agent (non-streaming text response)
           if (event.textContent != null && event.textContent!.isNotEmpty) {
             _transcript = event.textContent!;
+            // Add as an AI chat message
+            _chatHistory.add(ChatMessage(
+              content: event.textContent!,
+              role: 'assistant',
+              agent: event.author,
+            ));
           }
 
           // Audio response → AI is speaking
@@ -98,15 +111,34 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
           // Output transcription (what the AI is saying as text)
           if (event.outputTranscriptionText != null &&
               event.outputTranscriptionText!.isNotEmpty) {
-            _transcript += event.outputTranscriptionText!;
+            _partialAiTranscript += event.outputTranscriptionText!;
+            _transcript = _partialAiTranscript;
             _aiSpeaking = event.outputTranscriptionFinished != true;
+
+            if (event.outputTranscriptionFinished == true) {
+              // Finalize AI transcription as a chat message
+              _chatHistory.add(ChatMessage(
+                content: _partialAiTranscript.trim(),
+                role: 'assistant',
+                agent: event.author,
+              ));
+              _partialAiTranscript = '';
+            }
           }
 
           // Input transcription (what the user said)
           if (event.inputTranscriptionText != null &&
               event.inputTranscriptionText!.isNotEmpty) {
-            _userTranscript += event.inputTranscriptionText!;
+            _partialUserTranscript += event.inputTranscriptionText!;
+            _userTranscript = _partialUserTranscript;
+
             if (event.inputTranscriptionFinished == true) {
+              // Finalize user transcription as a chat message
+              _chatHistory.add(ChatMessage(
+                content: _partialUserTranscript.trim(),
+                role: 'user',
+              ));
+              _partialUserTranscript = '';
               _userTranscript = '';
             }
           }
@@ -203,7 +235,20 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
     _stopCameraStreaming();
     _wsService?.sendEnd();
     _wsService?.disconnect();
-    Navigator.pop(context);
+
+    // Navigate to chat screen with the consultation transcript
+    if (_chatHistory.isNotEmpty) {
+      Navigator.pushReplacementNamed(
+        context,
+        '/chat',
+        arguments: {
+          'sessionId': _sessionId,
+          'initialMessages': _chatHistory,
+        },
+      );
+    } else {
+      Navigator.pop(context);
+    }
   }
 
   @override

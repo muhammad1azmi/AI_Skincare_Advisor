@@ -4,9 +4,11 @@ __pycache__/
 *.pyc
 *.egg-info/
 dist/
+.pytest_cache/
 
 # Environment
 .env
+app/.env
 
 # IDE
 .idea/
@@ -30,11 +32,15 @@ node_modules/
 .DS_Store
 Thumbs.db
 
-# Logs
+# Logs & debug output
 *.log
+cloud_run_logs.txt
+stderr_logs.txt
+ws_results*.txt
+
+# Deprecated build configs
+Dockerfile.flutter
+cloudbuild-apk.yaml
 
 # Gemini
 .gemini/
-
-# Cloud Build (no longer used for APK)
-Dockerfile.flutter

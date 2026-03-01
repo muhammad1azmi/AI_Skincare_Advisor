@@ -22,9 +22,11 @@ Architecture:
 
 import asyncio
 import base64
+import collections
 import json
 import logging
 import os
+import time
 import traceback
 
 from dotenv import load_dotenv
@@ -133,6 +135,12 @@ logger.info("ADK App initialized with BigQuery Agent Analytics plugin")
 
 # Track active streaming sessions
 active_queues: dict[str, LiveRequestQueue] = {}
+
+# Rate limiting: per-session message tracking
+# { session_id: deque of timestamps }
+_rate_limits: dict[str, collections.deque] = {}
+_RATE_LIMIT_WINDOW = 60  # seconds
+_RATE_LIMIT_MAX_MESSAGES = 30  # max text messages per window
 
 # In-memory storage for FCM tokens (use Firestore in production)
 fcm_tokens: dict[str, str] = {}  # user_id -> fcm_token
@@ -280,6 +288,8 @@ async def websocket_streaming(websocket: WebSocket, user_id: str, session_id: st
                 )
             )
         ),
+        output_audio_transcription=types.AudioTranscriptionConfig(),
+        max_llm_calls=500,
     )
 
     logger.info(f"Session {session_id}: User: {firebase_user.get('name', authenticated_user_id)}")
@@ -336,6 +346,24 @@ async def websocket_streaming(websocket: WebSocket, user_id: str, session_id: st
                         user_text = json_message.get("text", "").strip()
                         if not user_text:
                             continue  # ignore empty messages
+
+                        # ── Rate limiting ──
+                        now = time.monotonic()
+                        if session_id not in _rate_limits:
+                            _rate_limits[session_id] = collections.deque()
+                        q = _rate_limits[session_id]
+                        # Purge old timestamps
+                        while q and now - q[0] > _RATE_LIMIT_WINDOW:
+                            q.popleft()
+                        if len(q) >= _RATE_LIMIT_MAX_MESSAGES:
+                            logger.warning(f"Session {session_id}: Rate limited")
+                            await websocket.send_text(json.dumps({
+                                "error": "rate_limited",
+                                "message": f"Too many messages. Max {_RATE_LIMIT_MAX_MESSAGES} per {_RATE_LIMIT_WINDOW}s.",
+                            }))
+                            continue
+                        q.append(now)
+
                         content = types.Content(
                             role="user",
                             parts=[types.Part(text=user_text)],
@@ -426,6 +454,7 @@ async def websocket_streaming(websocket: WebSocket, user_id: str, session_id: st
         # Per ADK docs: Always close the queue to prevent zombie sessions
         live_request_queue.close()
         active_queues.pop(session_id, None)
+        _rate_limits.pop(session_id, None)
         logger.info(f"Session {session_id}: Session cleaned up")
 
 

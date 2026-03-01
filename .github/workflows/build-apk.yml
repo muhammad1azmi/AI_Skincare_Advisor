@@ -3,6 +3,8 @@ name: Build & Distribute APK
 on:
   push:
     branches: [main]
+    paths:
+      - 'frontend/flutter_app/**'
   workflow_dispatch:
 
 jobs:

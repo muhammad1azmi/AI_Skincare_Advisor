@@ -1,0 +1,32 @@
+# === Secrets & credentials (NEVER ship these) ===
+.env
+app/.env
+*.key
+*.pem
+*.json
+!requirements.txt
+
+# === Dev/build artifacts ===
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.git/
+.gitignore
+
+# === ADK dev data ===
+.adk/
+app/.adk/
+
+# === Documentation & scripts ===
+*.md
+create_agent_engine.py
+
+# === Tests (not needed in production) ===
+**/tests/
+test_*.py
+
+# === IDE/editor ===
+.vscode/
+.idea/
+.gemini/

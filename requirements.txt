@@ -1,0 +1,7 @@
+google-adk[eval]
+google-cloud-aiplatform[agent_engine]
+fastapi
+uvicorn[standard]
+python-dotenv
+firebase-admin
+

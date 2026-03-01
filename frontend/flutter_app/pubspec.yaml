@@ -1,0 +1,51 @@
+name: skincare_advisor
+description: "AI Skincare Advisor — Real-time multimodal skincare consultation"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+
+  # Firebase
+  firebase_core: ^4.4.0
+  firebase_auth: ^6.1.4
+  firebase_messaging: ^16.1.1
+  google_sign_in: ^7.2.0
+
+  # Networking
+  web_socket_channel: ^3.0.2
+  http: ^1.2.2
+
+  # Audio
+  record: ^6.2.0
+  just_audio: ^0.10.5
+  audio_session: ^0.2.2
+
+  # Camera
+  camera: ^0.12.0
+
+  # State Management
+  flutter_riverpod: ^2.6.1
+
+  # UI
+  google_fonts: ^6.2.1
+  flutter_animate: ^4.5.2
+
+  # Utilities
+  permission_handler: ^12.0.1
+  uuid: ^4.5.1
+  shared_preferences: ^2.5.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true

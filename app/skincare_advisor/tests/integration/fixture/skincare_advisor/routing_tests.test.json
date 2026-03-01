@@ -1,0 +1,277 @@
+{
+    "eval_set_id": "skincare_advisor_routing_tests",
+    "name": "Agent Routing + KOL Content Tests",
+    "description": "Tests that the root orchestrator (1) routes queries to the correct specialist sub-agent AND (2) always follows up with kol_content_agent for relevant KOL video URLs.",
+    "eval_cases": [
+        {
+            "eval_id": "route_ingredient_checker_then_kol",
+            "conversation": [
+                {
+                    "invocation_id": "inv-route-ingredient-001",
+                    "user_content": {
+                        "parts": [
+                            {
+                                "text": "Is niacinamide safe for sensitive skin?"
+                            }
+                        ],
+                        "role": "user"
+                    },
+                    "final_response": {
+                        "parts": [
+                            {
+                                "text": "Niacinamide is generally considered safe and well-tolerated for sensitive skin. It's a form of Vitamin B3 known for its calming and barrier-strengthening properties. Here are some KOL videos about niacinamide for sensitive skin."
+                            }
+                        ],
+                        "role": "model"
+                    },
+                    "intermediate_data": {
+                        "tool_uses": [
+                            {
+                                "args": {
+                                    "request": "Is niacinamide safe for sensitive skin?"
+                                },
+                                "name": "ingredient_checker"
+                            },
+                            {
+                                "args": {
+                                    "request": "niacinamide sensitive skin KOL videos"
+                                },
+                                "name": "kol_content_agent"
+                            }
+                        ],
+                        "intermediate_responses": []
+                    }
+                }
+            ],
+            "session_input": {
+                "app_name": "skincare_advisor",
+                "user_id": "eval_user",
+                "state": {}
+            }
+        },
+        {
+            "eval_id": "route_routine_builder_then_kol",
+            "conversation": [
+                {
+                    "invocation_id": "inv-route-routine-001",
+                    "user_content": {
+                        "parts": [
+                            {
+                                "text": "Can you build me a morning skincare routine for oily skin?"
+                            }
+                        ],
+                        "role": "user"
+                    },
+                    "final_response": {
+                        "parts": [
+                            {
+                                "text": "Here's a morning skincare routine for oily skin: 1. Gentle foaming cleanser 2. Lightweight toner 3. Niacinamide serum 4. Oil-free moisturizer 5. Broad-spectrum SPF 50 sunscreen. Check out these KOL videos for oily skin routines."
+                            }
+                        ],
+                        "role": "model"
+                    },
+                    "intermediate_data": {
+                        "tool_uses": [
+                            {
+                                "args": {
+                                    "request": "morning skincare routine for oily skin"
+                                },
+                                "name": "routine_builder"
+                            },
+                            {
+                                "args": {
+                                    "request": "morning routine oily skin KOL videos"
+                                },
+                                "name": "kol_content_agent"
+                            }
+                        ],
+                        "intermediate_responses": []
+                    }
+                }
+            ],
+            "session_input": {
+                "app_name": "skincare_advisor",
+                "user_id": "eval_user",
+                "state": {}
+            }
+        },
+        {
+            "eval_id": "route_ingredient_interaction_then_kol",
+            "conversation": [
+                {
+                    "invocation_id": "inv-route-interaction-001",
+                    "user_content": {
+                        "parts": [
+                            {
+                                "text": "Can I use retinol and vitamin C together in the same routine?"
+                            }
+                        ],
+                        "role": "user"
+                    },
+                    "final_response": {
+                        "parts": [
+                            {
+                                "text": "Retinol and Vitamin C can be used together, but it's best to use them at different times — Vitamin C in the morning and retinol at night. Here are some KOL videos explaining how to layer these ingredients."
+                            }
+                        ],
+                        "role": "model"
+                    },
+                    "intermediate_data": {
+                        "tool_uses": [
+                            {
+                                "args": {
+                                    "request": "Can I use retinol and vitamin C together?"
+                                },
+                                "name": "ingredient_interaction_agent"
+                            },
+                            {
+                                "args": {
+                                    "request": "retinol vitamin C together KOL videos"
+                                },
+                                "name": "kol_content_agent"
+                            }
+                        ],
+                        "intermediate_responses": []
+                    }
+                }
+            ],
+            "session_input": {
+                "app_name": "skincare_advisor",
+                "user_id": "eval_user",
+                "state": {}
+            }
+        },
+        {
+            "eval_id": "route_skin_condition_then_kol",
+            "conversation": [
+                {
+                    "invocation_id": "inv-route-condition-001",
+                    "user_content": {
+                        "parts": [
+                            {
+                                "text": "I have red, flaky patches on my cheeks. What could this be?"
+                            }
+                        ],
+                        "role": "user"
+                    },
+                    "final_response": {
+                        "parts": [
+                            {
+                                "text": "Red, flaky patches on the cheeks could indicate eczema, rosacea, or seborrheic dermatitis. I'd recommend seeing a dermatologist. Here are some KOL videos about managing facial redness and flaky skin."
+                            }
+                        ],
+                        "role": "model"
+                    },
+                    "intermediate_data": {
+                        "tool_uses": [
+                            {
+                                "args": {
+                                    "request": "Red flaky patches on cheeks"
+                                },
+                                "name": "skin_condition_agent"
+                            },
+                            {
+                                "args": {
+                                    "request": "red flaky patches cheeks skin condition KOL videos"
+                                },
+                                "name": "kol_content_agent"
+                            }
+                        ],
+                        "intermediate_responses": []
+                    }
+                }
+            ],
+            "session_input": {
+                "app_name": "skincare_advisor",
+                "user_id": "eval_user",
+                "state": {}
+            }
+        },
+        {
+            "eval_id": "route_qa_then_kol",
+            "conversation": [
+                {
+                    "invocation_id": "inv-route-qa-001",
+                    "user_content": {
+                        "parts": [
+                            {
+                                "text": "Is it true that drinking more water improves skin hydration?"
+                            }
+                        ],
+                        "role": "user"
+                    },
+                    "final_response": {
+                        "parts": [
+                            {
+                                "text": "While staying hydrated is important for overall health, drinking water alone doesn't directly improve skin hydration. Topical moisturizers are more effective. Here are some KOL videos about skin hydration tips."
+                            }
+                        ],
+                        "role": "model"
+                    },
+                    "intermediate_data": {
+                        "tool_uses": [
+                            {
+                                "args": {
+                                    "request": "Does drinking more water improve skin hydration?"
+                                },
+                                "name": "qa_agent"
+                            },
+                            {
+                                "args": {
+                                    "request": "skin hydration tips KOL videos"
+                                },
+                                "name": "kol_content_agent"
+                            }
+                        ],
+                        "intermediate_responses": []
+                    }
+                }
+            ],
+            "session_input": {
+                "app_name": "skincare_advisor",
+                "user_id": "eval_user",
+                "state": {}
+            }
+        },
+        {
+            "eval_id": "route_kol_only",
+            "conversation": [
+                {
+                    "invocation_id": "inv-route-kol-001",
+                    "user_content": {
+                        "parts": [
+                            {
+                                "text": "Show me some influencer videos about acne treatment"
+                            }
+                        ],
+                        "role": "user"
+                    },
+                    "final_response": {
+                        "parts": [
+                            {
+                                "text": "Here are some recommended KOL videos about acne treatment from trusted skincare influencers on TikTok and Instagram."
+                            }
+                        ],
+                        "role": "model"
+                    },
+                    "intermediate_data": {
+                        "tool_uses": [
+                            {
+                                "args": {
+                                    "request": "influencer videos about acne treatment"
+                                },
+                                "name": "kol_content_agent"
+                            }
+                        ],
+                        "intermediate_responses": []
+                    }
+                }
+            ],
+            "session_input": {
+                "app_name": "skincare_advisor",
+                "user_id": "eval_user",
+                "state": {}
+            }
+        }
+    ]
+}

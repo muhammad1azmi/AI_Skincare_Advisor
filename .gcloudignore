@@ -1,0 +1,46 @@
+# Only include what's needed for the Flutter APK build
+# Ignore pattern: everything NOT in frontend/flutter_app
+
+# Large directories
+.venv/
+__pycache__/
+*.pyc
+
+# Version control
+.git/
+.gitignore
+
+# Secrets
+.env
+
+# Python/Server (not needed for Flutter build)
+app/
+eval/
+evals/
+server/
+tests/
+*.egg-info/
+dist/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+.gemini/
+
+# Flutter build caches (regenerated during build)
+frontend/flutter_app/.dart_tool/
+frontend/flutter_app/build/
+frontend/flutter_app/android/.gradle/
+frontend/flutter_app/ios/Pods/
+
+# Node
+node_modules/
+
+# Misc
+*.log
+.DS_Store
+Thumbs.db
+
+# Docker (not needed)
+Dockerfile*

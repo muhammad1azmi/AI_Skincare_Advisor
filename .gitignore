@@ -1,0 +1,40 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+
+# Environment
+.env
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Flutter build caches
+frontend/flutter_app/.dart_tool/
+frontend/flutter_app/build/
+frontend/flutter_app/android/.gradle/
+frontend/flutter_app/ios/Pods/
+frontend/flutter_app/ios/.symlinks/
+
+# Android local config (machine-specific)
+frontend/flutter_app/android/local.properties
+
+# Node
+node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Gemini
+.gemini/
+
+# Cloud Build (no longer used for APK)
+Dockerfile.flutter

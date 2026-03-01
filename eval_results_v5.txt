@@ -1,0 +1,48 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.13.6, pytest-9.0.2, pluggy-1.6.0 -- C:\Users\azmis\Documents\AI_Skincare_Advisor\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\azmis\Documents\AI_Skincare_Advisor
+plugins: anyio-4.12.1, asyncio-1.3.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 2 items
+
+app/skincare_advisor/tests/integration/test_eval.py::test_routing_to_correct_agents PASSED [ 50%]
+app/skincare_advisor/tests/integration/test_eval.py::test_safety_guardrails PASSED [100%]
+
+============================== warnings summary ===============================
+app/skincare_advisor/tests/integration/test_eval.py::test_routing_to_correct_agents
+app/skincare_advisor/tests/integration/test_eval.py::test_safety_guardrails
+  C:\Users\azmis\Documents\AI_Skincare_Advisor\.venv\Lib\site-packages\google\adk\evaluation\agent_evaluator.py:153: UserWarning: [EXPERIMENTAL] UserSimulatorProvider: This feature is experimental and may change or be removed in future versions without notice. It may introduce breaking changes at any time.
+    user_simulator_provider = UserSimulatorProvider(
+
+app/skincare_advisor/tests/integration/test_eval.py::test_routing_to_correct_agents
+  C:\Users\azmis\Documents\AI_Skincare_Advisor\.venv\Lib\site-packages\google\adk\evaluation\metric_evaluator_registry.py:106: UserWarning: [EXPERIMENTAL] MetricEvaluatorRegistry: This feature is experimental and may change or be removed in future versions without notice. It may introduce breaking changes at any time.
+    metric_evaluator_registry = MetricEvaluatorRegistry()
+
+app/skincare_advisor/tests/integration/test_eval.py::test_routing_to_correct_agents
+  C:\Users\azmis\Documents\AI_Skincare_Advisor\.venv\Lib\site-packages\google\adk\evaluation\local_eval_service.py:124: UserWarning: [EXPERIMENTAL] UserSimulatorProvider: This feature is experimental and may change or be removed in future versions without notice. It may introduce breaking changes at any time.
+    user_simulator_provider: UserSimulatorProvider = UserSimulatorProvider(),
+
+app/skincare_advisor/tests/integration/test_eval.py::test_routing_to_correct_agents
+app/skincare_advisor/tests/integration/test_eval.py::test_safety_guardrails
+  C:\Users\azmis\Documents\AI_Skincare_Advisor\.venv\Lib\site-packages\google\adk\evaluation\agent_evaluator.py:557: UserWarning: [EXPERIMENTAL] LocalEvalService: This feature is experimental and may change or be removed in future versions without notice. It may introduce breaking changes at any time.
+    eval_service = LocalEvalService(
+
+app/skincare_advisor/tests/integration/test_eval.py: 12 warnings
+  C:\Users\azmis\Documents\AI_Skincare_Advisor\.venv\Lib\site-packages\google\adk\evaluation\simulation\user_simulator_provider.py:77: UserWarning: [EXPERIMENTAL] StaticUserSimulator: This feature is experimental and may change or be removed in future versions without notice. It may introduce breaking changes at any time.
+    return StaticUserSimulator(static_conversation=eval_case.conversation)
+
+app/skincare_advisor/tests/integration/test_eval.py: 12 warnings
+  C:\Users\azmis\Documents\AI_Skincare_Advisor\.venv\Lib\site-packages\google\adk\evaluation\simulation\static_user_simulator.py:39: UserWarning: [EXPERIMENTAL] UserSimulator: This feature is experimental and may change or be removed in future versions without notice. It may introduce breaking changes at any time.
+    super().__init__(
+
+app/skincare_advisor/tests/integration/test_eval.py: 10 warnings
+  C:\Users\azmis\Documents\AI_Skincare_Advisor\.venv\Lib\site-packages\google\adk\runners.py:239: DeprecationWarning: The `plugins` argument is deprecated. Please use the `app` argument to provide plugins instead.
+    warnings.warn(
+
+app/skincare_advisor/tests/integration/test_eval.py: 11 warnings
+  C:\Users\azmis\Documents\AI_Skincare_Advisor\.venv\Lib\site-packages\google\genai\_api_client.py:770: DeprecationWarning: Inheritance class AiohttpClientSession from ClientSession is discouraged
+    class AiohttpClientSession(aiohttp.ClientSession):  # type: ignore[misc]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+================= 2 passed, 51 warnings in 466.33s (0:07:46) ==================

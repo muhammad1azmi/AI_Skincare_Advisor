@@ -62,6 +62,20 @@ jobs:
           echo "========================================="
           echo ""
 
+          # If no KEYSTORE_BASE64 secret yet, output base64 so user can save it
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "==========================================="
+            echo "📋 SAVE THIS AS KEYSTORE_BASE64 secret:"
+            echo "==========================================="
+            base64 -w 0 frontend/flutter_app/android/app/release.keystore
+            echo ""
+            echo "==========================================="
+            echo "Also set these secrets:"
+            echo "  KEYSTORE_PASSWORD=android"
+            echo "  KEY_PASSWORD=android"
+            echo "==========================================="
+          fi
+
           # Create key.properties for Gradle (in android/app/ where build.gradle.kts lives)
           printf "storePassword=${KEYSTORE_PASSWORD:-android}\nkeyPassword=${KEY_PASSWORD:-android}\nkeyAlias=release\nstoreFile=release.keystore\n" > frontend/flutter_app/android/app/key.properties
 

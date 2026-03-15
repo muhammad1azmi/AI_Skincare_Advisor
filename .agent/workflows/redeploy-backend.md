@@ -1,10 +1,10 @@
 ---
-description: How to redeploy the backend (Agent Engine)
+description: How to redeploy the backend (Agent Engine + Cloud Run)
 ---
 
 # Backend Redeployment
 
-Deploys the `skincare_advisor` agent to Google Cloud Agent Engine using the ADK CLI.
+Deploys the `skincare_advisor` agent to Google Cloud Agent Engine and the WebSocket server to Cloud Run.
 
 ## Prerequisites
 
@@ -12,7 +12,7 @@ Deploys the `skincare_advisor` agent to Google Cloud Agent Engine using the ADK 
 - Python with `google-adk` installed (`pip install google-adk`)
 - `app/.env` configured with `GOOGLE_CLOUD_PROJECT` and `GOOGLE_CLOUD_LOCATION`
 
-## Steps
+## Agent Engine Deploy (ADK agent code)
 
 // turbo-all
 
@@ -32,6 +32,13 @@ gcloud logging read "resource.labels.reasoning_engine_id=8778253446047334400 sev
 ```
 
 If the output is empty — no errors, deploy is healthy.
+
+## Cloud Run Deploy (WebSocket server)
+
+4. Deploy the WebSocket server to Cloud Run:
+```powershell
+gcloud run deploy skincare-advisor --project=boreal-graph-465506-f2 --region=us-central1 --source=. --allow-unauthenticated --set-env-vars="GOOGLE_CLOUD_PROJECT=boreal-graph-465506-f2,GOOGLE_CLOUD_LOCATION=us-central1,AGENT_ENGINE_ID=8778253446047334400,MODEL_ARMOR_TEMPLATE_ID=skincare-advisor-safety,MODEL_ARMOR_LOCATION=us-central1,SKIP_AUTH=true"
+```
 
 ## What the CLI Does
 

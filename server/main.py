@@ -43,6 +43,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from google.adk.apps import App
+from google.adk.runners import Runner
 from google.adk.agents.run_config import RunConfig, StreamingMode
 from google.adk.sessions import VertexAiSessionService, InMemorySessionService
 from google.adk.memory import VertexAiMemoryBankService, InMemoryMemoryService
@@ -105,11 +106,6 @@ bq_config = BigQueryLoggerConfig(
     max_content_length=500 * 1024,  # 500 KB limit for inline text
     batch_size=1,                   # Low latency (increase for high throughput)
     shutdown_timeout=10.0,
-    custom_tags={
-        "env": os.environ.get("ENV", "dev"),
-        "version": "1.0.0",
-    },
-    log_session_metadata=True,
 )
 bq_plugin = BigQueryAgentAnalyticsPlugin(
     project_id=_PROJECT_ID,
@@ -141,17 +137,23 @@ else:
     memory_service = InMemoryMemoryService()
     logger.info("Local dev mode — using InMemory session/memory services")
 
-# ADK App with BigQuery Analytics plugin (replaces raw Runner)
+# ADK App with BigQuery Analytics plugin
 adk_app = App(
     name="skincare_advisor",
     root_agent=root_agent,
     plugins=[bq_plugin],
+)
+
+# Runner with session/memory services (these moved from App to Runner in ADK v1.x)
+runner = Runner(
+    app_name="skincare_advisor",
+    agent=root_agent,
+    plugins=[bq_plugin],
     session_service=session_service,
     memory_service=memory_service,
 )
-runner = adk_app.runner
 
-logger.info("ADK App initialized with BigQuery Agent Analytics plugin")
+logger.info("ADK Runner initialized with BigQuery Agent Analytics plugin")
 
 # Track active streaming sessions
 active_queues: dict[str, LiveRequestQueue] = {}
@@ -430,11 +432,12 @@ async def websocket_streaming(websocket: WebSocket, user_id: str, session_id: st
                 )
             )
         ),
+        input_audio_transcription=types.AudioTranscriptionConfig(),
         output_audio_transcription=types.AudioTranscriptionConfig(),
         max_llm_calls=500,
     )
 
-    logger.info(f"Session {session_id}: User: {firebase_user.get('name', authenticated_user_id)}")
+    logger.info(f"Session {session_id}: User: {firebase_user.get('name', authenticated_user_id)}, Model: {root_agent.model}")
 
     # --- Phase 4: Bidi-Streaming ---
     async def upstream_task():
@@ -569,12 +572,13 @@ async def websocket_streaming(websocket: WebSocket, user_id: str, session_id: st
         except WebSocketDisconnect:
             logger.info(f"Session {session_id}: Client disconnected (downstream)")
         except Exception as e:
-            logger.error(f"Session {session_id}: Downstream error: {e}", exc_info=True)
+            logger.error(f"Session {session_id}: Downstream error: {e}")
+            traceback.print_exc()
             # Notify client of the error before the connection closes
             try:
                 await websocket.send_text(json.dumps({
                     "error": "server_error",
-                    "message": "An internal error occurred. Please reconnect.",
+                    "message": f"An internal error occurred: {type(e).__name__}: {e}. Please reconnect.",
                 }))
             except Exception:
                 pass  # Client may already be disconnected

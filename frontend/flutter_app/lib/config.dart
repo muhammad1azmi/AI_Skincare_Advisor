@@ -5,7 +5,7 @@ class AppConfig {
   /// Cloud Run backend URL — set via environment or override for local dev.
   static const String backendUrl = String.fromEnvironment(
     'BACKEND_URL',
-    defaultValue: 'wss://skincare-advisor-4nrerggyra-uc.a.run.app',
+    defaultValue: 'wss://skincare-advisor-1089521368524.us-central1.run.app',
   );
 
   /// REST API base URL (same host, different scheme).

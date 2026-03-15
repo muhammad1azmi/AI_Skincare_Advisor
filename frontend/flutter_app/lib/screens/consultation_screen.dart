@@ -13,6 +13,8 @@ import 'package:permission_handler/permission_handler.dart';
 import 'chat_screen.dart';
 import 'package:uuid/uuid.dart';
 
+import '../services/chat_history_service.dart';
+
 import '../services/auth_service.dart';
 import '../services/audio_service.dart';
 import '../services/camera_service.dart';
@@ -34,6 +36,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
   // Services
   WebSocketService? _wsService;
   final AudioService _audioService = AudioService();
+  final ChatHistoryService _historyService = ChatHistoryService();
   final CameraService _cameraService = CameraService();
   final AudioPlayer _audioPlayer = AudioPlayer();
 
@@ -139,11 +142,13 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
           // Text content from agent (non-streaming text response)
           if (event.textContent != null && event.textContent!.isNotEmpty) {
             _transcript = event.textContent!;
-            _chatHistory.add(ChatMessage(
+            final msg = ChatMessage(
               content: event.textContent!,
               role: 'assistant',
               agent: event.author,
-            ));
+            );
+            _chatHistory.add(msg);
+            _persistMessage(msg);
           }
 
           // Audio response → decode, buffer, and play
@@ -160,11 +165,13 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
             _aiSpeaking = event.outputTranscriptionFinished != true;
 
             if (event.outputTranscriptionFinished == true) {
-              _chatHistory.add(ChatMessage(
+              final msg = ChatMessage(
                 content: _partialAiTranscript.trim(),
                 role: 'assistant',
                 agent: event.author,
-              ));
+              );
+              _chatHistory.add(msg);
+              _persistMessage(msg);
               _partialAiTranscript = '';
             }
           }
@@ -176,10 +183,12 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
             _userTranscript = _partialUserTranscript;
 
             if (event.inputTranscriptionFinished == true) {
-              _chatHistory.add(ChatMessage(
+              final msg = ChatMessage(
                 content: _partialUserTranscript.trim(),
                 role: 'user',
-              ));
+              );
+              _chatHistory.add(msg);
+              _persistMessage(msg);
               _partialUserTranscript = '';
               _userTranscript = '';
             }
@@ -368,6 +377,20 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
     await _cameraService.flipCamera();
     if (mounted) setState(() {});
     if (_isCameraOn) _startCameraStreaming();
+  }
+
+  /// Persist a message to local cache for history.
+  void _persistMessage(ChatMessage msg) {
+    _historyService.saveMessage(
+      _sessionId,
+      CachedMessage(
+        id: msg.id,
+        content: msg.content,
+        role: msg.role,
+        agent: msg.agent,
+        timestamp: msg.timestamp.toIso8601String(),
+      ),
+    );
   }
 
   void _endCall() {

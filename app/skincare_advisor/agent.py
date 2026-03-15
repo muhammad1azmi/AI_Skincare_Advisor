@@ -242,7 +242,7 @@ def _output_safety_check(callback_context, llm_response):
 # "Multiple tools are supported only when they are all search tools" error.
 root_agent = Agent(
     name="skincare_advisor",
-    model="gemini-2.5-flash",
+    model="gemini-live-2.5-flash-native-audio",
     description="AI Skincare Advisor — Root Orchestrator. "
                 "Routes user requests to specialized skincare agents for analysis, "
                 "routine building, ingredient checking, and KOL content recommendations.",

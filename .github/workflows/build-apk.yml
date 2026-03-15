@@ -33,6 +33,43 @@ jobs:
       - name: Flutter version
         run: flutter --version
 
+      - name: Set up signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > frontend/flutter_app/android/app/release.keystore
+            echo "✅ Using release keystore from secrets"
+          else
+            echo "⚠️ No KEYSTORE_BASE64 secret found, using debug keystore"
+            cp ~/.android/debug.keystore frontend/flutter_app/android/app/release.keystore 2>/dev/null || \
+            keytool -genkey -v -keystore frontend/flutter_app/android/app/release.keystore \
+              -alias release -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=AI Skincare Advisor, OU=Dev, O=Skincare, L=Jakarta, ST=DKI, C=ID" \
+              -storepass android -keypass android
+          fi
+
+          # Print SHA-1 for Firebase registration
+          echo ""
+          echo "========================================="
+          echo "🔑 SHA-1 Fingerprint (add to Firebase):"
+          keytool -list -v -keystore frontend/flutter_app/android/app/release.keystore \
+            -alias release -storepass "${KEYSTORE_PASSWORD:-android}" -keypass "${KEY_PASSWORD:-android}" 2>/dev/null | grep SHA1 || \
+          keytool -list -v -keystore frontend/flutter_app/android/app/release.keystore \
+            -storepass "${KEYSTORE_PASSWORD:-android}" 2>/dev/null | grep SHA1
+          echo "========================================="
+          echo ""
+
+          # Create key.properties for Gradle (in android/app/ where build.gradle.kts lives)
+          cat > frontend/flutter_app/android/app/key.properties <<EOF
+storePassword=${KEYSTORE_PASSWORD:-android}
+keyPassword=${KEY_PASSWORD:-android}
+keyAlias=release
+storeFile=release.keystore
+EOF
+
       - name: Install dependencies
         working-directory: frontend/flutter_app
         run: flutter pub get

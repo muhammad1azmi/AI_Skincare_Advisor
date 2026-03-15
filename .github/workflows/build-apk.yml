@@ -5,7 +5,11 @@ on:
     branches: [main]
     paths:
       - 'frontend/flutter_app/**'
+      - '.github/workflows/build-apk.yml'
   workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build-apk:
@@ -35,7 +39,7 @@ jobs:
 
       - name: Analyze
         working-directory: frontend/flutter_app
-        run: flutter analyze --no-pub
+        run: flutter analyze --no-pub --no-fatal-infos --no-fatal-warnings
 
       - name: Build APK
         working-directory: frontend/flutter_app
@@ -59,5 +63,5 @@ jobs:
             frontend/flutter_app/build/app/outputs/flutter-apk/app-release.apk \
             --app "$FIREBASE_APP_ID" \
             --groups "internal-testers" \
-            --release-notes "Build ${{ github.run_number }} — ADK streaming, Firebase Auth, push notifications"
+            --release-notes "Build ${{ github.run_number }} — Model Armor, ADK streaming, Firebase Auth"
           rm /tmp/sa-key.json

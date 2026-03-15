@@ -63,12 +63,7 @@ jobs:
           echo ""
 
           # Create key.properties for Gradle (in android/app/ where build.gradle.kts lives)
-          cat > frontend/flutter_app/android/app/key.properties <<EOF
-storePassword=${KEYSTORE_PASSWORD:-android}
-keyPassword=${KEY_PASSWORD:-android}
-keyAlias=release
-storeFile=release.keystore
-EOF
+          printf "storePassword=${KEYSTORE_PASSWORD:-android}\nkeyPassword=${KEY_PASSWORD:-android}\nkeyAlias=release\nstoreFile=release.keystore\n" > frontend/flutter_app/android/app/key.properties
 
       - name: Install dependencies
         working-directory: frontend/flutter_app

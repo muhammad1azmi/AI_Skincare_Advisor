@@ -39,13 +39,18 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
+          KEYSTORE_PATH=frontend/flutter_app/android/app/release.keystore
+          DECODED=false
+
           if [ -n "$KEYSTORE_BASE64" ]; then
-            echo "$KEYSTORE_BASE64" | base64 -d > frontend/flutter_app/android/app/release.keystore
+            echo "$KEYSTORE_BASE64" | tr -d '[:space:]' | base64 -d > "$KEYSTORE_PATH" 2>/dev/null && DECODED=true
+          fi
+
+          if [ "$DECODED" = true ] && [ -s "$KEYSTORE_PATH" ]; then
             echo "✅ Using release keystore from secrets"
           else
-            echo "⚠️ No KEYSTORE_BASE64 secret found, using debug keystore"
-            cp ~/.android/debug.keystore frontend/flutter_app/android/app/release.keystore 2>/dev/null || \
-            keytool -genkey -v -keystore frontend/flutter_app/android/app/release.keystore \
+            echo "⚠️ Generating new keystore (no valid KEYSTORE_BASE64 secret found)"
+            keytool -genkey -v -keystore "$KEYSTORE_PATH" \
               -alias release -keyalg RSA -keysize 2048 -validity 10000 \
               -dname "CN=AI Skincare Advisor, OU=Dev, O=Skincare, L=Jakarta, ST=DKI, C=ID" \
               -storepass android -keypass android

@@ -1,0 +1,50 @@
+﻿[
+  {
+    "insertId": "69b6cc46000968d3b1cb30b7",
+    "logName": "projects/boreal-graph-465506-f2/logs/aiplatform.googleapis.com%2Freasoning_engine_stderr",
+    "receiveTimestamp": "2026-03-15T15:12:06.779426775Z",
+    "resource": {
+      "labels": {
+        "location": "us-central1",
+        "reasoning_engine_id": "3786576209060560896",
+        "resource_container": "1089521368524"
+      },
+      "type": "aiplatform.googleapis.com/ReasoningEngine"
+    },
+    "severity": "ERROR",
+    "textPayload": "Traceback (most recent call last):\n  File \"/usr/local/lib/python3.13/multiprocessing/process.py\", line 313, in _bootstrap\n    self.run()\n    ~~~~~~~~^^\n  File \"/usr/local/lib/python3.13/multiprocessing/process.py\", line 108, in run\n    self._target(*self._args, **self._kwargs)\n    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/code/server.py\", line 74, in run_server\n    asyncio.run(serve(address, pickle_file))\n    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.13/asyncio/runners.py\", line 195, in run\n    return runner.run(main)\n           ~~~~~~~~~~^^^^^^\n  File \"/usr/local/lib/python3.13/asyncio/runners.py\", line 118, in run\n    return self._loop.run_until_complete(task)\n           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^\n  File \"/usr/local/lib/python3.13/asyncio/base_events.py\", line 725, in run_until_complete\n    return future.result()\n           ~~~~~~~~~~~~~^^\n  File \"/code/server.py\", line 61, in serve\n    servicer = service_builder.construct_service(pickle_file)\n  File \"/code/service_builder.py\", line 361, in construct_service\n    raise utils.UserCodeControlPlaneError(",
+    "timestamp": "2026-03-15T15:12:06.616659Z"
+  },
+  {
+    "insertId": "69b6cc4600096184ae936608",
+    "logName": "projects/boreal-graph-465506-f2/logs/aiplatform.googleapis.com%2Freasoning_engine_stderr",
+    "receiveTimestamp": "2026-03-15T15:12:06.779426775Z",
+    "resource": {
+      "labels": {
+        "location": "us-central1",
+        "reasoning_engine_id": "3786576209060560896",
+        "resource_container": "1089521368524"
+      },
+      "type": "aiplatform.googleapis.com/ReasoningEngine"
+    },
+    "severity": "ERROR",
+    "textPayload": "Traceback (most recent call last):\n  File \"/code/service_builder.py\", line 349, in construct_service\n    obj = utils.get_object(python_file_name)\n  File \"/code/utils.py\", line 107, in get_object\n    obj = get_local_object(obj_filename)\n  File \"/code/utils.py\", line 126, in get_local_object\n    return cloudpickle.loads(f.read())\n           ~~~~~~~~~~~~~~~~~^^^^^^^^^^\nModuleNotFoundError: No module named 'skincare_advisor'",
+    "timestamp": "2026-03-15T15:12:06.614788Z"
+  },
+  {
+    "insertId": "69b6cc45000c25b3acac802b",
+    "logName": "projects/boreal-graph-465506-f2/logs/aiplatform.googleapis.com%2Freasoning_engine_stderr",
+    "receiveTimestamp": "2026-03-15T15:12:06.110349151Z",
+    "resource": {
+      "labels": {
+        "location": "us-central1",
+        "reasoning_engine_id": "3786576209060560896",
+        "resource_container": "1089521368524"
+      },
+      "type": "aiplatform.googleapis.com/ReasoningEngine"
+    },
+    "severity": "ERROR",
+    "textPayload": "Traceback (most recent call last):\n  File \"/usr/local/lib/python3.13/multiprocessing/process.py\", line 313, in _bootstrap\n    self.run()\n    ~~~~~~~~^^\n  File \"/usr/local/lib/python3.13/multiprocessing/process.py\", line 108, in run\n    self._target(*self._args, **self._kwargs)\n    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/code/server.py\", line 74, in run_server\n    asyncio.run(serve(address, pickle_file))\n    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.13/asyncio/runners.py\", line 195, in run\n    return runner.run(main)\n           ~~~~~~~~~~^^^^^^\n  File \"/usr/local/lib/python3.13/asyncio/runners.py\", line 118, in run\n    return self._loop.run_until_complete(task)\n           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^\n  File \"/usr/local/lib/python3.13/asyncio/base_events.py\", line 725, in run_until_complete\n    return future.result()\n           ~~~~~~~~~~~~~^^\n  File \"/code/server.py\", line 61, in serve\n    servicer = service_builder.construct_service(pickle_file)\n  File \"/code/service_builder.py\", line 361, in construct_service\n    raise utils.UserCodeControlPlaneError(",
+    "timestamp": "2026-03-15T15:12:05.796083Z"
+  }
+]

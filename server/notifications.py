@@ -113,3 +113,77 @@ async def send_followup_nudge(token: str) -> bool:
         body="It's been a while since your last consultation. Want to check in with your advisor?",
         data={"type": "followup", "action": "open_consultation"},
     )
+
+
+async def send_progress_milestone(token: str, total_notes: int) -> bool:
+    """Send a congratulatory notification when a progress milestone is reached.
+
+    Args:
+        token: FCM device token.
+        total_notes: Total number of progress notes recorded.
+    """
+    milestones = {
+        3: ("🎯 3rd Check-in!", "You're building a great skincare habit! Keep tracking your progress."),
+        5: ("⭐ 5 Check-ins!", "Amazing consistency! Your skin journey is on the right track."),
+        10: ("🏆 10 Check-ins!", "Incredible dedication! You're a skincare pro. Check your progress timeline!"),
+        25: ("💎 25 Check-ins!", "Outstanding commitment! Your skin has come a long way. Review your transformation!"),
+    }
+
+    title, body = milestones.get(
+        total_notes,
+        (f"📊 Check-in #{total_notes}", "Great job keeping up with your skincare tracking!"),
+    )
+
+    return await send_notification(
+        token=token,
+        title=title,
+        body=body,
+        data={"type": "progress_milestone", "total_notes": str(total_notes)},
+    )
+
+
+async def send_product_discount(
+    token: str,
+    concerns: list[str] | None = None,
+    deal_index: int = 0,
+) -> bool:
+    """Send a personalized product discount notification.
+
+    Matches products from the catalog to the user's skin concerns.
+    Notifications include a buy_url for direct e-commerce purchase.
+
+    Args:
+        token: FCM device token.
+        concerns: User's skin concerns (e.g., ["acne", "oily"]).
+            If None, sends a universally relevant product.
+        deal_index: Offset into matched products list.
+
+    Returns:
+        True if sent successfully, False otherwise.
+    """
+    from server.product_catalog import (
+        get_products_for_concerns,
+        format_product_for_notification,
+    )
+
+    # Get personalized product recommendations
+    products = get_products_for_concerns(
+        concerns=concerns or [],
+        limit=5,
+    )
+
+    if not products:
+        logger.warning("No products matched user concerns")
+        return False
+
+    # Pick one product (cycling through matches)
+    product = products[deal_index % len(products)]
+    notif = format_product_for_notification(product)
+
+    return await send_notification(
+        token=token,
+        title=notif["title"],
+        body=notif["body"],
+        data=notif["data"],
+    )
+

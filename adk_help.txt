@@ -1,0 +1,82 @@
+﻿Usage: adk deploy agent_engine [OPTIONS] AGENT
+
+  Deploys an agent to Agent Engine.
+
+  Example:
+
+    # With Express Mode API Key   adk deploy agent_engine --api_key=[api_key]
+    my_agent
+
+    # With Google Cloud Project and Region   adk deploy agent_engine
+    --project=[project] --region=[region]     --display_name=[app_name]
+    my_agent
+
+Options:
+  --api_key TEXT                  Optional. The API key to use for Express
+                                  Mode. If not provided, the API key from the
+                                  GOOGLE_API_KEY environment variable will be
+                                  used. It will only be used if
+                                  GOOGLE_GENAI_USE_VERTEXAI is true. (It will
+                                  override GOOGLE_API_KEY in the .env file if
+                                  it exists.)
+  --project TEXT                  Optional. Google Cloud project to deploy the
+                                  agent. It will override GOOGLE_CLOUD_PROJECT
+                                  in the .env file (if it exists). It will be
+                                  ignored if api_key is set.
+  --region TEXT                   Optional. Google Cloud region to deploy the
+                                  agent. It will override
+                                  GOOGLE_CLOUD_LOCATION in the .env file (if
+                                  it exists). It will be ignored if api_key is
+                                  set.
+  --staging_bucket TEXT           Deprecated. This argument is no longer
+                                  required or used.
+  --agent_engine_id TEXT          Optional. ID of the Agent Engine instance to
+                                  update if it exists (default: None, which
+                                  means a new instance will be created). If
+                                  project and region are set, this should be
+                                  the resource ID, and the corresponding
+                                  resource name in Agent Engine will be: `proj
+                                  ects/{project}/locations/{region}/reasoningE
+                                  ngines/{agent_engine_id}`. If api_key is
+                                  set, then agent_engine_id is required to be
+                                  the full resource name (i.e. `projects/*/loc
+                                  ations/*/reasoningEngines/*`).
+  --trace_to_cloud / --no-trace_to_cloud
+                                  Optional. Whether to enable Cloud Trace for
+                                  Agent Engine.
+  --otel_to_cloud                 Optional. Whether to enable OpenTelemetry
+                                  for Agent Engine.
+  --display_name TEXT             Optional. Display name of the agent in Agent
+                                  Engine.  [default: ""]
+  --description TEXT              Optional. Description of the agent in Agent
+                                  Engine.  [default: ""]
+  --adk_app TEXT                  Optional. Python file for defining the ADK
+                                  application (default: a file named
+                                  agent_engine_app.py)
+  --temp_folder TEXT              Optional. Temp folder for the generated
+                                  Agent Engine source files. If the folder
+                                  already exists, its contents will be
+                                  removed. (default: a timestamped folder in
+                                  the current working directory).
+  --adk_app_object TEXT           Optional. Python object corresponding to the
+                                  root ADK agent or app. It can only be
+                                  `root_agent` or `app`. (default:
+                                  `root_agent`)
+  --env_file TEXT                 Optional. The filepath to the `.env` file
+                                  for environment variables. (default: the
+                                  `.env` file in the `agent` directory, if
+                                  any.)
+  --requirements_file TEXT        Optional. The filepath to the
+                                  `requirements.txt` file to use. (default:
+                                  the `requirements.txt` file in the `agent`
+                                  directory, if any.)
+  --absolutize_imports BOOLEAN    NOTE: This flag is deprecated and will be
+                                  removed in the future.
+  --agent_engine_config_file TEXT
+                                  Optional. The filepath to the
+                                  `.agent_engine_config.json` file to use. The
+                                  values in this file will be overridden by
+                                  the values set by other flags. (default: the
+                                  `.agent_engine_config.json` file in the
+                                  `agent` directory, if any.)
+  --help                          Show this message and exit.

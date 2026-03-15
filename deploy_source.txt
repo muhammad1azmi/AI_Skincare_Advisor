@@ -1,0 +1,53 @@
+﻿python : Traceback (most recent call last):
+At line:1 char:1
++ python -c "
++ ~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: 
+    (Traceback (most recent call last)::St  
+  ring) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommand 
+   Error
+ 
+  File "<string>", line 18, in <module>
+    agent_engine = 
+client.agent_engines.create(
+        config={
+    ...<8 lines>...
+        },
+    )
+  File "C:\Users\azmis\AppData\Local\Program
+s\Python\Python313\Lib\site-packages\vertexa
+i\_genai\agent_engines.py", line 921, in 
+create
+    api_config = self._create_config(
+        mode="create",
+    ...<27 lines>...
+        build_options=config.build_options,
+    )
+  File "C:\Users\azmis\AppData\Local\Program
+s\Python\Python313\Lib\site-packages\vertexa
+i\_genai\agent_engines.py", line 1270, in 
+_create_config
+    self._set_source_code_spec(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        spec=agent_engine_spec,
+        ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<8 lines>...
+        build_options=build_options,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\azmis\AppData\Local\Program
+s\Python\Python313\Lib\site-packages\vertexa
+i\_genai\agent_engines.py", line 1055, in 
+_set_source_code_spec
+    raise ValueError(
+        "`class_methods` must be specified 
+if `source_packages` or 
+`developer_connect_source` is specified."
+    )
+ValueError: `class_methods` must be 
+specified if `source_packages` or 
+`developer_connect_source` is specified.
+Creating Agent Engine from SOURCE files (no pickle)...
+FULL ERROR: `class_methods` must be specified if `source_packages` or `developer_connect_source` is specified.

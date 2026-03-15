@@ -1,0 +1,145 @@
+{
+    "eval_set_id": "skincare_advisor_parallel_ingredient_tests",
+    "name": "Parallel Ingredient Agent Routing Tests",
+    "description": "Tests that the root orchestrator routes combined ingredient safety + interaction queries to the parallel_ingredient_agent workflow, rather than individual agents.",
+    "eval_cases": [
+        {
+            "eval_id": "route_parallel_ingredient_safety_and_interaction",
+            "conversation": [
+                {
+                    "invocation_id": "inv-parallel-001",
+                    "user_content": {
+                        "parts": [
+                            {
+                                "text": "Is retinol safe for my skin and can I use it together with vitamin C?"
+                            }
+                        ],
+                        "role": "user"
+                    },
+                    "final_response": {
+                        "parts": [
+                            {
+                                "text": "Retinol is generally safe and effective for anti-aging and acne. However, when using retinol with vitamin C, it's best to apply them at different times — vitamin C in the morning and retinol at night — to avoid irritation."
+                            }
+                        ],
+                        "role": "model"
+                    },
+                    "intermediate_data": {
+                        "tool_uses": [
+                            {
+                                "args": {
+                                    "request": "Is retinol safe and can I use it with vitamin C?"
+                                },
+                                "name": "parallel_ingredient_agent"
+                            },
+                            {
+                                "args": {
+                                    "request": "retinol vitamin C usage KOL videos"
+                                },
+                                "name": "kol_content_agent"
+                            }
+                        ],
+                        "intermediate_responses": []
+                    }
+                }
+            ],
+            "session_input": {
+                "app_name": "skincare_advisor",
+                "user_id": "eval_user",
+                "state": {}
+            }
+        },
+        {
+            "eval_id": "route_parallel_niacinamide_and_aha",
+            "conversation": [
+                {
+                    "invocation_id": "inv-parallel-002",
+                    "user_content": {
+                        "parts": [
+                            {
+                                "text": "Is niacinamide good for my pores and is it safe to combine with AHA exfoliants?"
+                            }
+                        ],
+                        "role": "user"
+                    },
+                    "final_response": {
+                        "parts": [
+                            {
+                                "text": "Niacinamide is excellent for pore minimization and oil control. It can be safely combined with AHA exfoliants, though you may want to introduce them gradually if you have sensitive skin to avoid irritation."
+                            }
+                        ],
+                        "role": "model"
+                    },
+                    "intermediate_data": {
+                        "tool_uses": [
+                            {
+                                "args": {
+                                    "request": "Is niacinamide good for pores and safe to combine with AHA?"
+                                },
+                                "name": "parallel_ingredient_agent"
+                            },
+                            {
+                                "args": {
+                                    "request": "niacinamide AHA combination KOL videos"
+                                },
+                                "name": "kol_content_agent"
+                            }
+                        ],
+                        "intermediate_responses": []
+                    }
+                }
+            ],
+            "session_input": {
+                "app_name": "skincare_advisor",
+                "user_id": "eval_user",
+                "state": {}
+            }
+        },
+        {
+            "eval_id": "route_parallel_benzoyl_peroxide_retinol",
+            "conversation": [
+                {
+                    "invocation_id": "inv-parallel-003",
+                    "user_content": {
+                        "parts": [
+                            {
+                                "text": "Tell me about benzoyl peroxide safety and whether I can mix it with retinol in my nighttime routine"
+                            }
+                        ],
+                        "role": "user"
+                    },
+                    "final_response": {
+                        "parts": [
+                            {
+                                "text": "Benzoyl peroxide is effective for acne treatment but can be drying. Mixing benzoyl peroxide with retinol is generally not recommended as they can deactivate each other and cause excessive irritation. Use them on alternate nights instead."
+                            }
+                        ],
+                        "role": "model"
+                    },
+                    "intermediate_data": {
+                        "tool_uses": [
+                            {
+                                "args": {
+                                    "request": "benzoyl peroxide safety and mixing with retinol"
+                                },
+                                "name": "parallel_ingredient_agent"
+                            },
+                            {
+                                "args": {
+                                    "request": "benzoyl peroxide retinol combination KOL videos"
+                                },
+                                "name": "kol_content_agent"
+                            }
+                        ],
+                        "intermediate_responses": []
+                    }
+                }
+            ],
+            "session_input": {
+                "app_name": "skincare_advisor",
+                "user_id": "eval_user",
+                "state": {}
+            }
+        }
+    ]
+}

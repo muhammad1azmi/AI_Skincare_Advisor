@@ -1,0 +1,99 @@
+{
+    "eval_set_id": "skincare_advisor_skin_analyzer_tests",
+    "name": "Skin Analyzer Routing Tests",
+    "description": "Tests that skin analysis and assessment queries are routed to the skin_analyzer sub-agent, followed by kol_content_agent for relevant content.",
+    "eval_cases": [
+        {
+            "eval_id": "route_skin_analyzer_assessment",
+            "conversation": [
+                {
+                    "invocation_id": "inv-route-skin-analyzer-001",
+                    "user_content": {
+                        "parts": [
+                            {
+                                "text": "Can you analyze my skin? I have some dry patches and redness on my cheeks."
+                            }
+                        ],
+                        "role": "user"
+                    },
+                    "final_response": {
+                        "parts": [
+                            {
+                                "text": "Based on your description, I can see signs of dryness and redness on your cheeks. This could indicate dehydrated skin or mild irritation. I recommend gentle, hydrating products and avoiding harsh ingredients. Here are some KOL videos about managing dry, sensitive skin."
+                            }
+                        ],
+                        "role": "model"
+                    },
+                    "intermediate_data": {
+                        "tool_uses": [
+                            {
+                                "args": {
+                                    "request": "Analyze skin with dry patches and redness on cheeks"
+                                },
+                                "name": "skin_analyzer"
+                            },
+                            {
+                                "args": {
+                                    "request": "dry patches redness cheeks skin analysis KOL videos"
+                                },
+                                "name": "kol_content_agent"
+                            }
+                        ],
+                        "intermediate_responses": []
+                    }
+                }
+            ],
+            "session_input": {
+                "app_name": "skincare_advisor",
+                "user_id": "eval_user",
+                "state": {}
+            }
+        },
+        {
+            "eval_id": "route_skin_analyzer_type",
+            "conversation": [
+                {
+                    "invocation_id": "inv-route-skin-analyzer-002",
+                    "user_content": {
+                        "parts": [
+                            {
+                                "text": "What type of skin do I have? My T-zone is oily but my cheeks are dry."
+                            }
+                        ],
+                        "role": "user"
+                    },
+                    "final_response": {
+                        "parts": [
+                            {
+                                "text": "Based on your description of an oily T-zone with dry cheeks, you likely have combination skin. This is one of the most common skin types. I recommend using different products for different zones of your face. Here are some KOL videos about combination skin care."
+                            }
+                        ],
+                        "role": "model"
+                    },
+                    "intermediate_data": {
+                        "tool_uses": [
+                            {
+                                "args": {
+                                    "request": "Determine skin type with oily T-zone and dry cheeks"
+                                },
+                                "name": "skin_analyzer"
+                            },
+                            {
+                                "args": {
+                                    "request": "combination skin type oily T-zone dry cheeks KOL videos"
+                                },
+                                "name": "kol_content_agent"
+                            }
+                        ],
+                        "intermediate_responses": []
+                    }
+                }
+            ],
+            "session_input": {
+                "app_name": "skincare_advisor",
+                "user_id": "eval_user",
+                "state": {}
+            }
+        }
+    ]
+}

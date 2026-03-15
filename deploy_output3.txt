@@ -1,0 +1,75 @@
+﻿============================================================
+  AI Skincare Advisor ù Agent Engine Deployment
+============================================================
+  Project:        boreal-graph-465506-f2
+  Location:       us-central1
+  Staging Bucket: gs://boreal-graph-465506-f2-staging
+  Mode:           UPDATE
+  Server Mode:    EXPERIMENTAL (bidi-streaming)
+  Agent Engine:   9130800854377431040
+============================================================
+
+Updating existing Agent Engine...
+python : Traceback (most recent call last):
+At line:1 char:1
++ python scripts/deploy.py --update 2>&1 | 
+Out-File -FilePath deploy_ou ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: 
+    (Traceback (most recent call last)::St  
+  ring) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommand 
+   Error
+ 
+  File "C:\Users\azmis\Documents\AI_Skincare
+_Advisor\scripts\deploy.py", line 176, in 
+<module>
+    main()
+    ~~~~^^
+  File "C:\Users\azmis\Documents\AI_Skincare
+_Advisor\scripts\deploy.py", line 172, in 
+main
+    asyncio.run(deploy(update=args.update))
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\azmis\AppData\Local\Program
+s\Python\Python313\Lib\asyncio\runners.py", 
+line 195, in run
+    return runner.run(main)
+           ~~~~~~~~~~^^^^^^
+  File "C:\Users\azmis\AppData\Local\Program
+s\Python\Python313\Lib\asyncio\runners.py", 
+line 118, in run
+    return 
+self._loop.run_until_complete(task)
+           
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\azmis\AppData\Local\Program
+s\Python\Python313\Lib\asyncio\base_events.p
+y", line 725, in run_until_complete
+    return future.result()
+           ~~~~~~~~~~~~~^^
+  File "C:\Users\azmis\Documents\AI_Skincare
+_Advisor\scripts\deploy.py", line 120, in 
+deploy
+    agent_engine = 
+client.agent_engines.update(
+        name=agent_engine_name,
+        agent=adk_app,
+        config=config,
+    )
+  File "C:\Users\azmis\AppData\Local\Program
+s\Python\Python313\Lib\site-packages\vertexa
+i\_genai\agent_engines.py", line 1598, in 
+update
+    raise RuntimeError(f"Failed to update 
+Agent Engine: {operation.error}")
+RuntimeError: Failed to update Agent 
+Engine: {'code': 3, 'message': 'Reasoning 
+Engine resource [projects/1089521368524/loca
+tions/us-central1/reasoningEngines/913080085
+4377431040] failed to start and cannot 
+serve traffic. Please refer to our 
+documentation (https://cloud.google.com/vert
+ex-ai/generative-ai/docs/agent-engine/troubl
+eshooting/deploy) for checking logs and 
+other troubleshooting tips.'}

@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -21,6 +22,18 @@ void main() async {
   final notificationService = NotificationService();
   await notificationService.initialize();
 
+  // Auto-register FCM token if user is already signed in.
+  final currentUser = FirebaseAuth.instance.currentUser;
+  if (currentUser != null && notificationService.token != null) {
+    notificationService.registerTokenWithServer(currentUser.uid);
+  }
+  // Also register on future sign-ins.
+  FirebaseAuth.instance.authStateChanges().listen((user) {
+    if (user != null && notificationService.token != null) {
+      notificationService.registerTokenWithServer(user.uid);
+    }
+  });
+
   // Set status bar style.
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
@@ -43,13 +56,14 @@ class SkincareAdvisorApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authStateProvider);
+    final themeMode = ref.watch(themeModeProvider);
 
     return MaterialApp(
       title: 'AI Skincare Advisor',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
-      themeMode: ThemeMode.system,
+      themeMode: themeMode,
       // Route based on auth state.
       initialRoute: authState.when(
         data: (user) => user != null ? AppRoutes.home : AppRoutes.login,

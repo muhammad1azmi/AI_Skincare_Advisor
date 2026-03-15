@@ -1,0 +1,23 @@
+﻿Agent Engine deployment uses relative paths; temporarily switching working directory to: C:\Users\azmis\Documents\AI_Skincare_Advisor\app
+Staging all files in: C:\Users\azmis\Documents\AI_Skincare_Advisor\app\skincare_advisor_tmp20260315_222128
+Staging all files in: C:\Users\azmis\Documents\AI_Skincare_Advisor\app\skincare_advisor_tmp20260315_222128
+Copying agent source code...
+Copying agent source code complete.
+Resolving files and dependencies...
+Overwriting C:\Users\azmis\Documents\AI_Skincare_Advisor\app\skincare_advisor_tmp20260315_222128\requirements.txt with app/skincare_advisor/requirements.txt
+Cleaning up the temp folder: skincare_advisor_tmp20260315_222128
+adk : Deploy failed: [Errno 2] No such file 
+or directory: 
+'app/skincare_advisor/requirements.txt'
+At line:1 char:1
++ adk deploy agent_engine 
+--project=boreal-graph-465506-f2 
+--region=us- ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: 
+    (Deploy failed: ...quirements.txt':Str  
+  ing) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommand 
+   Error
+ 

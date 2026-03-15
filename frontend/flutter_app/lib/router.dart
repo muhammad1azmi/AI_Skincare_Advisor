@@ -4,8 +4,6 @@ import 'screens/home_screen.dart';
 import 'screens/chat_screen.dart';
 import 'screens/consultation_screen.dart';
 import 'screens/consultation_lobby_screen.dart';
-import 'screens/history_screen.dart';
-import 'screens/profile_screen.dart';
 import 'screens/login_screen.dart';
 
 /// App-level route names.
@@ -17,8 +15,6 @@ class AppRoutes {
   static const String chat = '/chat';
   static const String consultationLobby = '/consultation-lobby';
   static const String consultation = '/consultation';
-  static const String history = '/history';
-  static const String profile = '/profile';
 }
 
 /// Simple router using named routes.
@@ -37,10 +33,6 @@ class AppRouter {
         return _slide(const ConsultationLobbyScreen(), settings);
       case AppRoutes.consultation:
         return _slide(const ConsultationScreen(), settings);
-      case AppRoutes.history:
-        return _slide(const HistoryScreen(), settings);
-      case AppRoutes.profile:
-        return _slide(const ProfileScreen(), settings);
       default:
         return _fade(const HomeScreen(), settings);
     }

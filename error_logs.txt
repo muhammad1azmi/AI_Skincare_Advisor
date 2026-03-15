@@ -1,0 +1,82 @@
+﻿[
+  {
+    "insertId": "69b69d8d000b91e07ba823c3",
+    "logName": "projects/boreal-graph-465506-f2/logs/aiplatform.googleapis.com%2Freasoning_engine_stderr",
+    "receiveTimestamp": "2026-03-15T11:52:46.074890362Z",
+    "resource": {
+      "labels": {
+        "location": "us-central1",
+        "reasoning_engine_id": "9130800854377431040",
+        "resource_container": "1089521368524"
+      },
+      "type": "aiplatform.googleapis.com/ReasoningEngine"
+    },
+    "severity": "ERROR",
+    "textPayload": "Traceback (most recent call last):\n  File \"/usr/local/lib/python3.10/multiprocessing/process.py\", line 314, in _bootstrap\n    self.run()\n  File \"/usr/local/lib/python3.10/multiprocessing/process.py\", line 108, in run\n    self._target(*self._args, **self._kwargs)\n  File \"/code/.venv/lib/python3.10/site-packages/uvicorn/_subprocess.py\", line 80, in subprocess_started\n    target(sockets=sockets)\n  File \"/code/.venv/lib/python3.10/site-packages/uvicorn/supervisors/multiprocess.py\", line 64, in target\n    return self.real_target(sockets)\n  File \"/code/.venv/lib/python3.10/site-packages/uvicorn/server.py\", line 75, in run\n    return asyncio_run(self.serve(sockets=sockets), loop_factory=self.config.get_loop_factory())\n  File \"/code/.venv/lib/python3.10/site-packages/uvicorn/_compat.py\", line 60, in asyncio_run\n    return loop.run_until_complete(main)\n  File \"/usr/local/lib/python3.10/asyncio/base_events.py\", line 649, in run_until_complete\n    return future.result()\n  File \"/code/.venv/lib/python3.10/site-packages/uvicorn/server.py\", line 79, in serve\n    await self._serve(sockets)\n  File \"/code/.venv/lib/python3.10/site-packages/uvicorn/server.py\", line 86, in _serve\n    config.load()\n  File \"/code/.venv/lib/python3.10/site-packages/uvicorn/config.py\", line 447, in load\n    self.loaded_app = self.loaded_app()\n  File \"/code/app/api/app.py\", line 77, in create_app\n    raise e\n  File \"/code/app/api/app.py\", line 69, in create_app\n    router = python_file_api_builder.create_apis(\n  File \"/code/app/api/factory/python_file_api_builder.py\", line 1025, in create_apis\n    raise utils.UserCodeControlPlaneError(\napp.api.factory.utils.UserCodeControlPlaneError: Control plane operation failed due to user code: No module named 'skincare_advisor'",
+    "timestamp": "2026-03-15T11:52:45.758240Z"
+  },
+  {
+    "insertId": "69b69d8d000b9018a6b5cb2a",
+    "logName": "projects/boreal-graph-465506-f2/logs/aiplatform.googleapis.com%2Freasoning_engine_stderr",
+    "receiveTimestamp": "2026-03-15T11:52:46.074890362Z",
+    "resource": {
+      "labels": {
+        "location": "us-central1",
+        "reasoning_engine_id": "9130800854377431040",
+        "resource_container": "1089521368524"
+      },
+      "type": "aiplatform.googleapis.com/ReasoningEngine"
+    },
+    "severity": "ERROR",
+    "textPayload": "Traceback (most recent call last):\n  File \"/code/app/api/factory/python_file_api_builder.py\", line 1013, in create_apis\n    obj = utils.get_object(python_file_name)\n  File \"/code/app/api/factory/utils.py\", line 159, in get_object\n    obj = get_local_object(obj_filename)\n  File \"/code/app/api/factory/utils.py\", line 178, in get_local_object\n    return cloudpickle.loads(f.read())\nModuleNotFoundError: No module named 'skincare_advisor'",
+    "timestamp": "2026-03-15T11:52:45.757784Z"
+  },
+  {
+    "insertId": "69b69d8d000b7fbbbc425f1d",
+    "logName": "projects/boreal-graph-465506-f2/logs/aiplatform.googleapis.com%2Freasoning_engine_stderr",
+    "receiveTimestamp": "2026-03-15T11:52:46.074890362Z",
+    "resource": {
+      "labels": {
+        "location": "us-central1",
+        "reasoning_engine_id": "9130800854377431040",
+        "resource_container": "1089521368524"
+      },
+      "type": "aiplatform.googleapis.com/ReasoningEngine"
+    },
+    "severity": "ERROR",
+    "textPayload": "Traceback (most recent call last):\n  File \"/usr/local/lib/python3.10/multiprocessing/process.py\", line 314, in _bootstrap\n    self.run()\n  File \"/usr/local/lib/python3.10/multiprocessing/process.py\", line 108, in run\n    self._target(*self._args, **self._kwargs)\n  File \"/code/.venv/lib/python3.10/site-packages/uvicorn/_subprocess.py\", line 80, in subprocess_started\n    target(sockets=sockets)\n  File \"/code/.venv/lib/python3.10/site-packages/uvicorn/supervisors/multiprocess.py\", line 64, in target\n    return self.real_target(sockets)\n  File \"/code/.venv/lib/python3.10/site-packages/uvicorn/server.py\", line 75, in run\n    return asyncio_run(self.serve(sockets=sockets), loop_factory=self.config.get_loop_factory())\n  File \"/code/.venv/lib/python3.10/site-packages/uvicorn/_compat.py\", line 60, in asyncio_run\n    return loop.run_until_complete(main)\n  File \"/usr/local/lib/python3.10/asyncio/base_events.py\", line 649, in run_until_complete\n    return future.result()\n  File \"/code/.venv/lib/python3.10/site-packages/uvicorn/server.py\", line 79, in serve\n    await self._serve(sockets)\n  File \"/code/.venv/lib/python3.10/site-packages/uvicorn/server.py\", line 86, in _serve\n    config.load()\n  File \"/code/.venv/lib/python3.10/site-packages/uvicorn/config.py\", line 447, in load\n    self.loaded_app = self.loaded_app()\n  File \"/code/app/api/app.py\", line 77, in create_app\n    raise e\n  File \"/code/app/api/app.py\", line 69, in create_app\n    router = python_file_api_builder.create_apis(\n  File \"/code/app/api/factory/python_file_api_builder.py\", line 1025, in create_apis\n    raise utils.UserCodeControlPlaneError(\napp.api.factory.utils.UserCodeControlPlaneError: Control plane operation failed due to user code: No module named 'skincare_advisor'",
+    "timestamp": "2026-03-15T11:52:45.753595Z"
+  },
+  {
+    "insertId": "69b69d8d000b7e54145d5c2d",
+    "logName": "projects/boreal-graph-465506-f2/logs/aiplatform.googleapis.com%2Freasoning_engine_stderr",
+    "receiveTimestamp": "2026-03-15T11:52:46.074890362Z",
+    "resource": {
+      "labels": {
+        "location": "us-central1",
+        "reasoning_engine_id": "9130800854377431040",
+        "resource_container": "1089521368524"
+      },
+      "type": "aiplatform.googleapis.com/ReasoningEngine"
+    },
+    "severity": "ERROR",
+    "textPayload": "Traceback (most recent call last):\n  File \"/code/app/api/factory/python_file_api_builder.py\", line 1013, in create_apis\n    obj = utils.get_object(python_file_name)\n  File \"/code/app/api/factory/utils.py\", line 159, in get_object\n    obj = get_local_object(obj_filename)\n  File \"/code/app/api/factory/utils.py\", line 178, in get_local_object\n    return cloudpickle.loads(f.read())\nModuleNotFoundError: No module named 'skincare_advisor'",
+    "timestamp": "2026-03-15T11:52:45.753236Z"
+  },
+  {
+    "insertId": "69b69d8d000b774951af8676",
+    "logName": "projects/boreal-graph-465506-f2/logs/aiplatform.googleapis.com%2Freasoning_engine_stderr",
+    "receiveTimestamp": "2026-03-15T11:52:46.074890362Z",
+    "resource": {
+      "labels": {
+        "location": "us-central1",
+        "reasoning_engine_id": "9130800854377431040",
+        "resource_container": "1089521368524"
+      },
+      "type": "aiplatform.googleapis.com/ReasoningEngine"
+    },
+    "severity": "ERROR",
+    "textPayload": "Traceback (most recent call last):\n  File \"/usr/local/lib/python3.10/multiprocessing/process.py\", line 314, in _bootstrap\n    self.run()\n  File \"/usr/local/lib/python3.10/multiprocessing/process.py\", line 108, in run\n    self._target(*self._args, **self._kwargs)\n  File \"/code/.venv/lib/python3.10/site-packages/uvicorn/_subprocess.py\", line 80, in subprocess_started\n    target(sockets=sockets)\n  File \"/code/.venv/lib/python3.10/site-packages/uvicorn/supervisors/multiprocess.py\", line 64, in target\n    return self.real_target(sockets)\n  File \"/code/.venv/lib/python3.10/site-packages/uvicorn/server.py\", line 75, in run\n    return asyncio_run(self.serve(sockets=sockets), loop_factory=self.config.get_loop_factory())\n  File \"/code/.venv/lib/python3.10/site-packages/uvicorn/_compat.py\", line 60, in asyncio_run\n    return loop.run_until_complete(main)\n  File \"/usr/local/lib/python3.10/asyncio/base_events.py\", line 649, in run_until_complete\n    return future.result()\n  File \"/code/.venv/lib/python3.10/site-packages/uvicorn/server.py\", line 79, in serve\n    await self._serve(sockets)\n  File \"/code/.venv/lib/python3.10/site-packages/uvicorn/server.py\", line 86, in _serve\n    config.load()\n  File \"/code/.venv/lib/python3.10/site-packages/uvicorn/config.py\", line 447, in load\n    self.loaded_app = self.loaded_app()\n  File \"/code/app/api/app.py\", line 77, in create_app\n    raise e\n  File \"/code/app/api/app.py\", line 69, in create_app\n    router = python_file_api_builder.create_apis(\n  File \"/code/app/api/factory/python_file_api_builder.py\", line 1025, in create_apis\n    raise utils.UserCodeControlPlaneError(\napp.api.factory.utils.UserCodeControlPlaneError: Control plane operation failed due to user code: No module named 'skincare_advisor'",
+    "timestamp": "2026-03-15T11:52:45.751433Z"
+  }
+]

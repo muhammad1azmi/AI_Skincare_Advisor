@@ -1,0 +1,7 @@
+google-cloud-aiplatform[agent_engines,adk]
+google-adk[eval]
+google-cloud-modelarmor
+firebase-admin
+opentelemetry-sdk
+cloudpickle>=3.0
+pydantic

@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:uuid/uuid.dart';
 
 import '../services/auth_service.dart';
+import '../services/chat_history_service.dart';
 import '../services/websocket_service.dart';
 
 /// Chat message model.
@@ -36,6 +37,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   final _controller = TextEditingController();
   final _scrollController = ScrollController();
   final List<ChatMessage> _messages = [];
+  final _historyService = ChatHistoryService();
   WebSocketService? _wsService;
   bool _isConnecting = false;
   bool _isConnected = false;
@@ -68,7 +70,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         }
       }
       _sessionId ??= const Uuid().v4();
-      // Don't connect yet — lazy connect on first message.
+      // Load cached messages for this session.
+      if (_messages.isEmpty) {
+        _loadCachedMessages();
+      }
     });
   }
 
@@ -110,6 +115,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               agent: event.author,
             ));
           });
+          _cacheMessage(event.textContent!, 'assistant', agent: event.author);
           _scrollToBottom();
         }
 
@@ -120,11 +126,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             _partialTranscript += event.outputTranscriptionText!;
             if (event.outputTranscriptionFinished == true) {
               _isTyping = false;
+              final transcript = _partialTranscript.trim();
               _messages.add(ChatMessage(
-                content: _partialTranscript.trim(),
+                content: transcript,
                 role: 'assistant',
                 agent: event.author,
               ));
+              _cacheMessage(transcript, 'assistant', agent: event.author);
               _partialTranscript = '';
             }
           });
@@ -164,6 +172,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     });
     _controller.clear();
     _scrollToBottom();
+    _cacheMessage(text, 'user');
 
     // Lazy connect on first message.
     if (!_isConnected) {
@@ -176,6 +185,37 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
 
     _wsService!.sendText(text);
+  }
+
+  Future<void> _loadCachedMessages() async {
+    if (_sessionId == null) return;
+    final cached = await _historyService.loadMessages(_sessionId!);
+    if (cached.isNotEmpty && mounted) {
+      setState(() {
+        _messages.addAll(cached.map((c) => ChatMessage(
+              id: c.id,
+              content: c.content,
+              role: c.role,
+              agent: c.agent,
+              timestamp: DateTime.tryParse(c.timestamp) ?? DateTime.now(),
+            )));
+      });
+      _scrollToBottom();
+    }
+  }
+
+  void _cacheMessage(String content, String role, {String? agent}) {
+    if (_sessionId == null) return;
+    _historyService.saveMessage(
+      _sessionId!,
+      CachedMessage(
+        id: const Uuid().v4(),
+        content: content,
+        role: role,
+        agent: agent,
+        timestamp: DateTime.now().toIso8601String(),
+      ),
+    );
   }
 
   void _scrollToBottom() {

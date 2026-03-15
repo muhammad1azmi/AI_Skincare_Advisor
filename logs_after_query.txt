@@ -1,0 +1,302 @@
+﻿[
+  {
+    "insertId": "69b6dd87000b2e96bd669784",
+    "logName": "projects/boreal-graph-465506-f2/logs/aiplatform.googleapis.com%2Freasoning_engine_stderr",
+    "receiveTimestamp": "2026-03-15T16:25:43.754563136Z",
+    "resource": {
+      "labels": {
+        "location": "us-central1",
+        "reasoning_engine_id": "8778253446047334400",
+        "resource_container": "1089521368524"
+      },
+      "type": "aiplatform.googleapis.com/ReasoningEngine"
+    },
+    "textPayload": "[12]      INFO:     Application startup complete.",
+    "timestamp": "2026-03-15T16:25:43.732822Z"
+  },
+  {
+    "insertId": "69b6dd87000b2b5b66b96072",
+    "logName": "projects/boreal-graph-465506-f2/logs/aiplatform.googleapis.com%2Freasoning_engine_stderr",
+    "receiveTimestamp": "2026-03-15T16:25:43.754563136Z",
+    "resource": {
+      "labels": {
+        "location": "us-central1",
+        "reasoning_engine_id": "8778253446047334400",
+        "resource_container": "1089521368524"
+      },
+      "type": "aiplatform.googleapis.com/ReasoningEngine"
+    },
+    "textPayload": "[12]      INFO:     Waiting for application startup.",
+    "timestamp": "2026-03-15T16:25:43.731995Z"
+  },
+  {
+    "insertId": "69b6dd87000b2a7d2f2579fe",
+    "logName": "projects/boreal-graph-465506-f2/logs/aiplatform.googleapis.com%2Freasoning_engine_stderr",
+    "receiveTimestamp": "2026-03-15T16:25:43.754563136Z",
+    "resource": {
+      "labels": {
+        "location": "us-central1",
+        "reasoning_engine_id": "8778253446047334400",
+        "resource_container": "1089521368524"
+      },
+      "type": "aiplatform.googleapis.com/ReasoningEngine"
+    },
+    "textPayload": "[12]      INFO:     Started server process [12]",
+    "timestamp": "2026-03-15T16:25:43.731773Z"
+  },
+  {
+    "insertId": "69b6dd87000b2645615c5b24",
+    "logName": "projects/boreal-graph-465506-f2/logs/aiplatform.googleapis.com%2Freasoning_engine_stderr",
+    "receiveTimestamp": "2026-03-15T16:25:43.754563136Z",
+    "resource": {
+      "labels": {
+        "location": "us-central1",
+        "reasoning_engine_id": "8778253446047334400",
+        "resource_container": "1089521368524"
+      },
+      "type": "aiplatform.googleapis.com/ReasoningEngine"
+    },
+    "textPayload": "[12]      WARNING:  OpenTelemetry tracing is not enabled. Please set the `OTEL_PYTHON_TRACER_PROVIDER` environment variable to enable tracing.",
+    "timestamp": "2026-03-15T16:25:43.730693Z"
+  },
+  {
+    "insertId": "69b6dd87000b0358b2c4fa85",
+    "logName": "projects/boreal-graph-465506-f2/logs/aiplatform.googleapis.com%2Freasoning_engine_stderr",
+    "receiveTimestamp": "2026-03-15T16:25:43.754563136Z",
+    "resource": {
+      "labels": {
+        "location": "us-central1",
+        "reasoning_engine_id": "8778253446047334400",
+        "resource_container": "1089521368524"
+      },
+      "type": "aiplatform.googleapis.com/ReasoningEngine"
+    },
+    "textPayload": "[4]       INFO:     Application startup complete.",
+    "timestamp": "2026-03-15T16:25:43.721752Z"
+  },
+  {
+    "insertId": "69b6dd87000b0162ec009a7f",
+    "logName": "projects/boreal-graph-465506-f2/logs/aiplatform.googleapis.com%2Freasoning_engine_stderr",
+    "receiveTimestamp": "2026-03-15T16:25:43.754563136Z",
+    "resource": {
+      "labels": {
+        "location": "us-central1",
+        "reasoning_engine_id": "8778253446047334400",
+        "resource_container": "1089521368524"
+      },
+      "type": "aiplatform.googleapis.com/ReasoningEngine"
+    },
+    "textPayload": "[4]       INFO:     Waiting for application startup.",
+    "timestamp": "2026-03-15T16:25:43.721250Z"
+  },
+  {
+    "insertId": "69b6dd87000b01009de87c30",
+    "logName": "projects/boreal-graph-465506-f2/logs/aiplatform.googleapis.com%2Freasoning_engine_stderr",
+    "receiveTimestamp": "2026-03-15T16:25:43.754563136Z",
+    "resource": {
+      "labels": {
+        "location": "us-central1",
+        "reasoning_engine_id": "8778253446047334400",
+        "resource_container": "1089521368524"
+      },
+      "type": "aiplatform.googleapis.com/ReasoningEngine"
+    },
+    "textPayload": "[4]       INFO:     Started server process [4]",
+    "timestamp": "2026-03-15T16:25:43.721152Z"
+  },
+  {
+    "insertId": "69b6dd87000afaef471e9ebb",
+    "logName": "projects/boreal-graph-465506-f2/logs/aiplatform.googleapis.com%2Freasoning_engine_stderr",
+    "receiveTimestamp": "2026-03-15T16:25:43.754563136Z",
+    "resource": {
+      "labels": {
+        "location": "us-central1",
+        "reasoning_engine_id": "8778253446047334400",
+        "resource_container": "1089521368524"
+      },
+      "type": "aiplatform.googleapis.com/ReasoningEngine"
+    },
+    "textPayload": "[4]       WARNING:  OpenTelemetry tracing is not enabled. Please set the `OTEL_PYTHON_TRACER_PROVIDER` environment variable to enable tracing.",
+    "timestamp": "2026-03-15T16:25:43.719599Z"
+  },
+  {
+    "insertId": "69b6dd87000ae790148da14c",
+    "logName": "projects/boreal-graph-465506-f2/logs/aiplatform.googleapis.com%2Freasoning_engine_stderr",
+    "receiveTimestamp": "2026-03-15T16:25:43.754563136Z",
+    "resource": {
+      "labels": {
+        "location": "us-central1",
+        "reasoning_engine_id": "8778253446047334400",
+        "resource_container": "1089521368524"
+      },
+      "type": "aiplatform.googleapis.com/ReasoningEngine"
+    },
+    "textPayload": "[10]      INFO:     Application startup complete.",
+    "timestamp": "2026-03-15T16:25:43.714640Z"
+  },
+  {
+    "insertId": "69b6dd87000ae5e19c64e9b0",
+    "logName": "projects/boreal-graph-465506-f2/logs/aiplatform.googleapis.com%2Freasoning_engine_stderr",
+    "receiveTimestamp": "2026-03-15T16:25:43.754563136Z",
+    "resource": {
+      "labels": {
+        "location": "us-central1",
+        "reasoning_engine_id": "8778253446047334400",
+        "resource_container": "1089521368524"
+      },
+      "type": "aiplatform.googleapis.com/ReasoningEngine"
+    },
+    "textPayload": "[10]      INFO:     Waiting for application startup.",
+    "timestamp": "2026-03-15T16:25:43.714209Z"
+  },
+  {
+    "insertId": "69b6dd87000ae57218262474",
+    "logName": "projects/boreal-graph-465506-f2/logs/aiplatform.googleapis.com%2Freasoning_engine_stderr",
+    "receiveTimestamp": "2026-03-15T16:25:43.754563136Z",
+    "resource": {
+      "labels": {
+        "location": "us-central1",
+        "reasoning_engine_id": "8778253446047334400",
+        "resource_container": "1089521368524"
+      },
+      "type": "aiplatform.googleapis.com/ReasoningEngine"
+    },
+    "textPayload": "[10]      INFO:     Started server process [10]",
+    "timestamp": "2026-03-15T16:25:43.714098Z"
+  },
+  {
+    "insertId": "69b6dd87000ae15ffb4c5fb5",
+    "logName": "projects/boreal-graph-465506-f2/logs/aiplatform.googleapis.com%2Freasoning_engine_stderr",
+    "receiveTimestamp": "2026-03-15T16:25:43.754563136Z",
+    "resource": {
+      "labels": {
+        "location": "us-central1",
+        "reasoning_engine_id": "8778253446047334400",
+        "resource_container": "1089521368524"
+      },
+      "type": "aiplatform.googleapis.com/ReasoningEngine"
+    },
+    "textPayload": "[10]      WARNING:  OpenTelemetry tracing is not enabled. Please set the `OTEL_PYTHON_TRACER_PROVIDER` environment variable to enable tracing.",
+    "timestamp": "2026-03-15T16:25:43.713055Z"
+  },
+  {
+    "insertId": "69b6dd850002741cc74d0c94",
+    "logName": "projects/boreal-graph-465506-f2/logs/aiplatform.googleapis.com%2Freasoning_engine_stderr",
+    "receiveTimestamp": "2026-03-15T16:25:41.425861896Z",
+    "resource": {
+      "labels": {
+        "location": "us-central1",
+        "reasoning_engine_id": "8778253446047334400",
+        "resource_container": "1089521368524"
+      },
+      "type": "aiplatform.googleapis.com/ReasoningEngine"
+    },
+    "textPayload": "[185]     WARNING:  Model Armor module not available ? using basic guardrails only",
+    "timestamp": "2026-03-15T16:25:41.160796Z"
+  },
+  {
+    "insertId": "69b6dd8400010ee1279aea6f",
+    "logName": "projects/boreal-graph-465506-f2/logs/aiplatform.googleapis.com%2Freasoning_engine_stderr",
+    "receiveTimestamp": "2026-03-15T16:25:40.091849252Z",
+    "resource": {
+      "labels": {
+        "location": "us-central1",
+        "reasoning_engine_id": "8778253446047334400",
+        "resource_container": "1089521368524"
+      },
+      "type": "aiplatform.googleapis.com/ReasoningEngine"
+    },
+    "textPayload": "[5]       INFO:     Application startup complete.",
+    "timestamp": "2026-03-15T16:25:40.069345Z"
+  },
+  {
+    "insertId": "69b6dd8400010caba3add1fa",
+    "logName": "projects/boreal-graph-465506-f2/logs/aiplatform.googleapis.com%2Freasoning_engine_stderr",
+    "receiveTimestamp": "2026-03-15T16:25:40.091849252Z",
+    "resource": {
+      "labels": {
+        "location": "us-central1",
+        "reasoning_engine_id": "8778253446047334400",
+        "resource_container": "1089521368524"
+      },
+      "type": "aiplatform.googleapis.com/ReasoningEngine"
+    },
+    "textPayload": "[5]       INFO:     Waiting for application startup.",
+    "timestamp": "2026-03-15T16:25:40.068779Z"
+  },
+  {
+    "insertId": "69b6dd8400010c6137c989e4",
+    "logName": "projects/boreal-graph-465506-f2/logs/aiplatform.googleapis.com%2Freasoning_engine_stderr",
+    "receiveTimestamp": "2026-03-15T16:25:40.091849252Z",
+    "resource": {
+      "labels": {
+        "location": "us-central1",
+        "reasoning_engine_id": "8778253446047334400",
+        "resource_container": "1089521368524"
+      },
+      "type": "aiplatform.googleapis.com/ReasoningEngine"
+    },
+    "textPayload": "[5]       INFO:     Started server process [5]",
+    "timestamp": "2026-03-15T16:25:40.068705Z"
+  },
+  {
+    "insertId": "69b6dd8400010a0f13819e6d",
+    "logName": "projects/boreal-graph-465506-f2/logs/aiplatform.googleapis.com%2Freasoning_engine_stderr",
+    "receiveTimestamp": "2026-03-15T16:25:40.091849252Z",
+    "resource": {
+      "labels": {
+        "location": "us-central1",
+        "reasoning_engine_id": "8778253446047334400",
+        "resource_container": "1089521368524"
+      },
+      "type": "aiplatform.googleapis.com/ReasoningEngine"
+    },
+    "textPayload": "[6]       INFO:     Application startup complete.",
+    "timestamp": "2026-03-15T16:25:40.068111Z"
+  },
+  {
+    "insertId": "69b6dd84000108e9a21e01df",
+    "logName": "projects/boreal-graph-465506-f2/logs/aiplatform.googleapis.com%2Freasoning_engine_stderr",
+    "receiveTimestamp": "2026-03-15T16:25:40.091849252Z",
+    "resource": {
+      "labels": {
+        "location": "us-central1",
+        "reasoning_engine_id": "8778253446047334400",
+        "resource_container": "1089521368524"
+      },
+      "type": "aiplatform.googleapis.com/ReasoningEngine"
+    },
+    "textPayload": "[5]       WARNING:  OpenTelemetry tracing is not enabled. Please set the `OTEL_PYTHON_TRACER_PROVIDER` environment variable to enable tracing.",
+    "timestamp": "2026-03-15T16:25:40.067817Z"
+  },
+  {
+    "insertId": "69b6dd8400010832f11d0526",
+    "logName": "projects/boreal-graph-465506-f2/logs/aiplatform.googleapis.com%2Freasoning_engine_stderr",
+    "receiveTimestamp": "2026-03-15T16:25:40.091849252Z",
+    "resource": {
+      "labels": {
+        "location": "us-central1",
+        "reasoning_engine_id": "8778253446047334400",
+        "resource_container": "1089521368524"
+      },
+      "type": "aiplatform.googleapis.com/ReasoningEngine"
+    },
+    "textPayload": "[6]       INFO:     Waiting for application startup.",
+    "timestamp": "2026-03-15T16:25:40.067634Z"
+  },
+  {
+    "insertId": "69b6dd84000107d1b4bce350",
+    "logName": "projects/boreal-graph-465506-f2/logs/aiplatform.googleapis.com%2Freasoning_engine_stderr",
+    "receiveTimestamp": "2026-03-15T16:25:40.091849252Z",
+    "resource": {
+      "labels": {
+        "location": "us-central1",
+        "reasoning_engine_id": "8778253446047334400",
+        "resource_container": "1089521368524"
+      },
+      "type": "aiplatform.googleapis.com/ReasoningEngine"
+    },
+    "textPayload": "[6]       INFO:     Started server process [6]",
+    "timestamp": "2026-03-15T16:25:40.067537Z"
+  }
+]

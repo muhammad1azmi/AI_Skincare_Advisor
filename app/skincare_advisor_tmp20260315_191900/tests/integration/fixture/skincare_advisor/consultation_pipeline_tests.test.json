@@ -1,0 +1,127 @@
+{
+    "eval_set_id": "skincare_advisor_consultation_pipeline_tests",
+    "name": "Consultation Pipeline Routing Tests",
+    "description": "Tests that comprehensive consultation requests route to the consultation_pipeline_agent. The pipeline already includes KOL content internally, so no separate kol_content_agent call is expected.",
+    "eval_cases": [
+        {
+            "eval_id": "route_full_consultation",
+            "conversation": [
+                {
+                    "invocation_id": "inv-pipeline-001",
+                    "user_content": {
+                        "parts": [
+                            {
+                                "text": "I want a full skin consultation. Analyze my skin, check for any conditions, and build me a complete skincare routine."
+                            }
+                        ],
+                        "role": "user"
+                    },
+                    "final_response": {
+                        "parts": [
+                            {
+                                "text": "Here's your complete consultation: Based on the skin analysis, I identified your skin type and concerns. The condition assessment shows areas to focus on. I've built you a personalized routine with morning and evening steps, and here are some KOL videos matching your skin concerns."
+                            }
+                        ],
+                        "role": "model"
+                    },
+                    "intermediate_data": {
+                        "tool_uses": [
+                            {
+                                "args": {
+                                    "request": "Full skin consultation: analyze skin, check conditions, build routine"
+                                },
+                                "name": "consultation_pipeline_agent"
+                            }
+                        ],
+                        "intermediate_responses": []
+                    }
+                }
+            ],
+            "session_input": {
+                "app_name": "skincare_advisor",
+                "user_id": "eval_user",
+                "state": {}
+            }
+        },
+        {
+            "eval_id": "route_analyze_everything",
+            "conversation": [
+                {
+                    "invocation_id": "inv-pipeline-002",
+                    "user_content": {
+                        "parts": [
+                            {
+                                "text": "Analyze everything about my skin and give me a complete plan with product recommendations"
+                            }
+                        ],
+                        "role": "user"
+                    },
+                    "final_response": {
+                        "parts": [
+                            {
+                                "text": "I've done a comprehensive analysis of your skin. Here's the complete plan including skin assessment, condition findings, a personalized routine, and relevant KOL videos to help you on your skincare journey."
+                            }
+                        ],
+                        "role": "model"
+                    },
+                    "intermediate_data": {
+                        "tool_uses": [
+                            {
+                                "args": {
+                                    "request": "Complete skin analysis and skincare plan"
+                                },
+                                "name": "consultation_pipeline_agent"
+                            }
+                        ],
+                        "intermediate_responses": []
+                    }
+                }
+            ],
+            "session_input": {
+                "app_name": "skincare_advisor",
+                "user_id": "eval_user",
+                "state": {}
+            }
+        },
+        {
+            "eval_id": "route_comprehensive_assessment",
+            "conversation": [
+                {
+                    "invocation_id": "inv-pipeline-003",
+                    "user_content": {
+                        "parts": [
+                            {
+                                "text": "I'm new to skincare. Can you do a comprehensive assessment of my skin and recommend a complete beginner routine?"
+                            }
+                        ],
+                        "role": "user"
+                    },
+                    "final_response": {
+                        "parts": [
+                            {
+                                "text": "Welcome to your skincare journey! I've assessed your skin comprehensively — here's what I found, the conditions to be aware of, and a beginner-friendly routine tailored to your needs. Check out these KOL videos for beginners."
+                            }
+                        ],
+                        "role": "model"
+                    },
+                    "intermediate_data": {
+                        "tool_uses": [
+                            {
+                                "args": {
+                                    "request": "Comprehensive skin assessment and beginner routine"
+                                },
+                                "name": "consultation_pipeline_agent"
+                            }
+                        ],
+                        "intermediate_responses": []
+                    }
+                }
+            ],
+            "session_input": {
+                "app_name": "skincare_advisor",
+                "user_id": "eval_user",
+                "state": {}
+            }
+        }
+    ]
+}

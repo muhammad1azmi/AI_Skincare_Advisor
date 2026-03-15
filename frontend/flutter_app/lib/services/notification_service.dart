@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
 
 import '../config.dart';
 
@@ -72,13 +73,45 @@ class NotificationService {
     // Handle notification tap when app is in background.
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
       debugPrint('[FCM] Notification opened: ${message.data}');
-      onNotificationTap?.call(message.data);
+      _handleNotificationData(message.data);
     });
 
     // Check if app was opened from a notification (terminated state).
     final initialMessage = await _messaging.getInitialMessage();
     if (initialMessage != null) {
-      onNotificationTap?.call(initialMessage.data);
+      _handleNotificationData(initialMessage.data);
+    }
+  }
+
+  /// Handle notification data — open product buy_url or forward to app
+  /// callback.
+  void _handleNotificationData(Map<String, dynamic> data) {
+    final type = data['type'] as String?;
+
+    if (type == 'product_discount') {
+      // Open the product's e-commerce link.
+      final buyUrl = data['buy_url'] as String?;
+      if (buyUrl != null && buyUrl.isNotEmpty) {
+        _openUrl(buyUrl);
+        return;
+      }
+    }
+
+    // All other notification types go through the app callback.
+    onNotificationTap?.call(data);
+  }
+
+  /// Launch a URL in the user's browser.
+  Future<void> _openUrl(String url) async {
+    try {
+      final uri = Uri.parse(url);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        debugPrint('[FCM] Cannot launch URL: $url');
+      }
+    } catch (e) {
+      debugPrint('[FCM] Error launching URL: $e');
     }
   }
 
@@ -97,3 +130,4 @@ class NotificationService {
     }
   }
 }
+

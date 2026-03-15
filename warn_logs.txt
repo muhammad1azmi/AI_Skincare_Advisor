@@ -1,0 +1,18 @@
+﻿[
+  {
+    "insertId": "69b6e6d100002c7e46785fa6",
+    "logName": "projects/boreal-graph-465506-f2/logs/aiplatform.googleapis.com%2Freasoning_engine_stderr",
+    "receiveTimestamp": "2026-03-15T17:05:21.088901809Z",
+    "resource": {
+      "labels": {
+        "location": "us-central1",
+        "reasoning_engine_id": "8778253446047334400",
+        "resource_container": "1089521368524"
+      },
+      "type": "aiplatform.googleapis.com/ReasoningEngine"
+    },
+    "severity": "ERROR",
+    "textPayload": "Traceback (most recent call last):\n  File \"/usr/local/lib/python3.13/threading.py\", line 1044, in _bootstrap_inner\n    self.run()\n    ~~~~~~~~^^\n  File \"/usr/local/lib/python3.13/threading.py\", line 995, in run\n    self._target(*self._args, **self._kwargs)\n    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/code/.venv/lib/python3.13/site-packages/google/adk/runners.py\", line 486, in _asyncio_thread_main\n    asyncio.run(_invoke_run_async())\n    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.13/asyncio/runners.py\", line 195, in run\n    return runner.run(main)\n           ~~~~~~~~~~^^^^^^\n  File \"/usr/local/lib/python3.13/asyncio/runners.py\", line 118, in run\n    return self._loop.run_until_complete(task)\n           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^\n  File \"/usr/local/lib/python3.13/asyncio/base_events.py\", line 725, in run_until_complete\n    return future.result()\n           ~~~~~~~~~~~~~^^\n  File \"/code/.venv/lib/python3.13/site-packages/google/adk/runners.py\", line 479, in _invoke_run_async\n    async for event in agen:",
+    "timestamp": "2026-03-15T17:05:21.011390Z"
+  }
+]

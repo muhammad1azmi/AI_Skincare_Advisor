@@ -1,0 +1,3 @@
+﻿Agent status: projects/boreal-graph-465506-f2/locations/us-central1/reasoningEngines/8778253446047334400
+Display name: AI Skincare Advisor
+Event type: dict

@@ -1,0 +1,227 @@
+﻿[
+  {
+    "insertId": "69b6d956000d888b0aae01ea",
+    "logName": "projects/boreal-graph-465506-f2/logs/aiplatform.googleapis.com%2Freasoning_engine_stderr",
+    "receiveTimestamp": "2026-03-15T16:07:50.953147947Z",
+    "resource": {
+      "labels": {
+        "location": "us-central1",
+        "reasoning_engine_id": "8778253446047334400",
+        "resource_container": "1089521368524"
+      },
+      "type": "aiplatform.googleapis.com/ReasoningEngine"
+    },
+    "textPayload": " ...killed.",
+    "timestamp": "2026-03-15T16:07:50.886923Z"
+  },
+  {
+    "insertId": "69b6d955000749c550cecfe8",
+    "logName": "projects/boreal-graph-465506-f2/logs/aiplatform.googleapis.com%2Freasoning_engine_stderr",
+    "receiveTimestamp": "2026-03-15T16:07:49.618948415Z",
+    "resource": {
+      "labels": {
+        "location": "us-central1",
+        "reasoning_engine_id": "8778253446047334400",
+        "resource_container": "1089521368524"
+      },
+      "type": "aiplatform.googleapis.com/ReasoningEngine"
+    },
+    "textPayload": "[11]      INFO:     Waiting for application shutdown.",
+    "timestamp": "2026-03-15T16:07:49.477637Z"
+  },
+  {
+    "insertId": "69b6d9550005e0c220aeb7f6",
+    "logName": "projects/boreal-graph-465506-f2/logs/aiplatform.googleapis.com%2Freasoning_engine_stderr",
+    "receiveTimestamp": "2026-03-15T16:07:49.618948415Z",
+    "resource": {
+      "labels": {
+        "location": "us-central1",
+        "reasoning_engine_id": "8778253446047334400",
+        "resource_container": "1089521368524"
+      },
+      "type": "aiplatform.googleapis.com/ReasoningEngine"
+    },
+    "textPayload": "[4]       INFO:     Waiting for application shutdown.",
+    "timestamp": "2026-03-15T16:07:49.385218Z"
+  },
+  {
+    "insertId": "69b6d9550005c0b49ecd3969",
+    "logName": "projects/boreal-graph-465506-f2/logs/aiplatform.googleapis.com%2Freasoning_engine_stderr",
+    "receiveTimestamp": "2026-03-15T16:07:49.618948415Z",
+    "resource": {
+      "labels": {
+        "location": "us-central1",
+        "reasoning_engine_id": "8778253446047334400",
+        "resource_container": "1089521368524"
+      },
+      "type": "aiplatform.googleapis.com/ReasoningEngine"
+    },
+    "textPayload": "[11]      INFO:     Shutting down",
+    "timestamp": "2026-03-15T16:07:49.377012Z"
+  },
+  {
+    "insertId": "69b6d9550004577072d6794f",
+    "logName": "projects/boreal-graph-465506-f2/logs/aiplatform.googleapis.com%2Freasoning_engine_stderr",
+    "receiveTimestamp": "2026-03-15T16:07:49.618948415Z",
+    "resource": {
+      "labels": {
+        "location": "us-central1",
+        "reasoning_engine_id": "8778253446047334400",
+        "resource_container": "1089521368524"
+      },
+      "type": "aiplatform.googleapis.com/ReasoningEngine"
+    },
+    "textPayload": "[4]       INFO:     Shutting down",
+    "timestamp": "2026-03-15T16:07:49.284528Z"
+  },
+  {
+    "insertId": "69b6d95500043c8fafafd4c4",
+    "logName": "projects/boreal-graph-465506-f2/logs/aiplatform.googleapis.com%2Freasoning_engine_stderr",
+    "receiveTimestamp": "2026-03-15T16:07:49.618948415Z",
+    "resource": {
+      "labels": {
+        "location": "us-central1",
+        "reasoning_engine_id": "8778253446047334400",
+        "resource_container": "1089521368524"
+      },
+      "type": "aiplatform.googleapis.com/ReasoningEngine"
+    },
+    "textPayload": "[2]       INFO:     Terminated child process [12]",
+    "timestamp": "2026-03-15T16:07:49.277647Z"
+  },
+  {
+    "insertId": "69b6d95500043c232ca37826",
+    "logName": "projects/boreal-graph-465506-f2/logs/aiplatform.googleapis.com%2Freasoning_engine_stderr",
+    "receiveTimestamp": "2026-03-15T16:07:49.618948415Z",
+    "resource": {
+      "labels": {
+        "location": "us-central1",
+        "reasoning_engine_id": "8778253446047334400",
+        "resource_container": "1089521368524"
+      },
+      "type": "aiplatform.googleapis.com/ReasoningEngine"
+    },
+    "textPayload": "[2]       INFO:     Terminated child process [11]",
+    "timestamp": "2026-03-15T16:07:49.277539Z"
+  },
+  {
+    "insertId": "69b6d95500043ba5a2e81f8e",
+    "logName": "projects/boreal-graph-465506-f2/logs/aiplatform.googleapis.com%2Freasoning_engine_stderr",
+    "receiveTimestamp": "2026-03-15T16:07:49.618948415Z",
+    "resource": {
+      "labels": {
+        "location": "us-central1",
+        "reasoning_engine_id": "8778253446047334400",
+        "resource_container": "1089521368524"
+      },
+      "type": "aiplatform.googleapis.com/ReasoningEngine"
+    },
+    "textPayload": "[2]       INFO:     Terminated child process [10]",
+    "timestamp": "2026-03-15T16:07:49.277413Z"
+  },
+  {
+    "insertId": "69b6d95500043b33f59b3b66",
+    "logName": "projects/boreal-graph-465506-f2/logs/aiplatform.googleapis.com%2Freasoning_engine_stderr",
+    "receiveTimestamp": "2026-03-15T16:07:49.618948415Z",
+    "resource": {
+      "labels": {
+        "location": "us-central1",
+        "reasoning_engine_id": "8778253446047334400",
+        "resource_container": "1089521368524"
+      },
+      "type": "aiplatform.googleapis.com/ReasoningEngine"
+    },
+    "textPayload": "[2]       INFO:     Terminated child process [9]",
+    "timestamp": "2026-03-15T16:07:49.277299Z"
+  },
+  {
+    "insertId": "69b6d95500043a95b347b15e",
+    "logName": "projects/boreal-graph-465506-f2/logs/aiplatform.googleapis.com%2Freasoning_engine_stderr",
+    "receiveTimestamp": "2026-03-15T16:07:49.618948415Z",
+    "resource": {
+      "labels": {
+        "location": "us-central1",
+        "reasoning_engine_id": "8778253446047334400",
+        "resource_container": "1089521368524"
+      },
+      "type": "aiplatform.googleapis.com/ReasoningEngine"
+    },
+    "textPayload": "[2]       INFO:     Terminated child process [8]",
+    "timestamp": "2026-03-15T16:07:49.277141Z"
+  },
+  {
+    "insertId": "69b6d955000439f4d6ad8107",
+    "logName": "projects/boreal-graph-465506-f2/logs/aiplatform.googleapis.com%2Freasoning_engine_stderr",
+    "receiveTimestamp": "2026-03-15T16:07:49.618948415Z",
+    "resource": {
+      "labels": {
+        "location": "us-central1",
+        "reasoning_engine_id": "8778253446047334400",
+        "resource_container": "1089521368524"
+      },
+      "type": "aiplatform.googleapis.com/ReasoningEngine"
+    },
+    "textPayload": "[2]       INFO:     Terminated child process [7]",
+    "timestamp": "2026-03-15T16:07:49.276980Z"
+  },
+  {
+    "insertId": "69b6d955000438f97d834cf8",
+    "logName": "projects/boreal-graph-465506-f2/logs/aiplatform.googleapis.com%2Freasoning_engine_stderr",
+    "receiveTimestamp": "2026-03-15T16:07:49.618948415Z",
+    "resource": {
+      "labels": {
+        "location": "us-central1",
+        "reasoning_engine_id": "8778253446047334400",
+        "resource_container": "1089521368524"
+      },
+      "type": "aiplatform.googleapis.com/ReasoningEngine"
+    },
+    "textPayload": "[2]       INFO:     Terminated child process [6]",
+    "timestamp": "2026-03-15T16:07:49.276729Z"
+  },
+  {
+    "insertId": "69b6d9550004332a9d95c372",
+    "logName": "projects/boreal-graph-465506-f2/logs/aiplatform.googleapis.com%2Freasoning_engine_stderr",
+    "receiveTimestamp": "2026-03-15T16:07:49.618948415Z",
+    "resource": {
+      "labels": {
+        "location": "us-central1",
+        "reasoning_engine_id": "8778253446047334400",
+        "resource_container": "1089521368524"
+      },
+      "type": "aiplatform.googleapis.com/ReasoningEngine"
+    },
+    "textPayload": "[2]       INFO:     Terminated child process [5]",
+    "timestamp": "2026-03-15T16:07:49.275242Z"
+  },
+  {
+    "insertId": "69b6d955000432b7973e21fb",
+    "logName": "projects/boreal-graph-465506-f2/logs/aiplatform.googleapis.com%2Freasoning_engine_stderr",
+    "receiveTimestamp": "2026-03-15T16:07:49.618948415Z",
+    "resource": {
+      "labels": {
+        "location": "us-central1",
+        "reasoning_engine_id": "8778253446047334400",
+        "resource_container": "1089521368524"
+      },
+      "type": "aiplatform.googleapis.com/ReasoningEngine"
+    },
+    "textPayload": "[2]       INFO:     Terminated child process [4]",
+    "timestamp": "2026-03-15T16:07:49.275127Z"
+  },
+  {
+    "insertId": "69b6d955000431af7270f6cc",
+    "logName": "projects/boreal-graph-465506-f2/logs/aiplatform.googleapis.com%2Freasoning_engine_stderr",
+    "receiveTimestamp": "2026-03-15T16:07:49.282117054Z",
+    "resource": {
+      "labels": {
+        "location": "us-central1",
+        "reasoning_engine_id": "8778253446047334400",
+        "resource_container": "1089521368524"
+      },
+      "type": "aiplatform.googleapis.com/ReasoningEngine"
+    },
+    "textPayload": "Session terminated, killing shell...[2]       INFO:     Received SIGTERM, exiting.",
+    "timestamp": "2026-03-15T16:07:49.274863Z"
+  }
+]

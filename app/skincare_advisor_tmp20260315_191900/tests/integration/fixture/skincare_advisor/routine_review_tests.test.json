@@ -1,0 +1,145 @@
+{
+    "eval_set_id": "skincare_advisor_routine_review_tests",
+    "name": "Routine Review Agent Routing Tests",
+    "description": "Tests that safety-critical routine requests route to the routine_review_agent, which builds a routine and validates it through a critic/refiner safety loop.",
+    "eval_cases": [
+        {
+            "eval_id": "route_safe_routine_sensitive_skin",
+            "conversation": [
+                {
+                    "invocation_id": "inv-review-001",
+                    "user_content": {
+                        "parts": [
+                            {
+                                "text": "Build me a safe routine for sensitive, acne-prone skin. Make sure nothing conflicts."
+                            }
+                        ],
+                        "role": "user"
+                    },
+                    "final_response": {
+                        "parts": [
+                            {
+                                "text": "Here's a safety-reviewed routine for sensitive, acne-prone skin. All ingredients have been checked for conflicts and the routine includes proper SPF and patch-testing notes for your sensitive skin."
+                            }
+                        ],
+                        "role": "model"
+                    },
+                    "intermediate_data": {
+                        "tool_uses": [
+                            {
+                                "args": {
+                                    "request": "Safe routine for sensitive acne-prone skin with no ingredient conflicts"
+                                },
+                                "name": "routine_review_agent"
+                            },
+                            {
+                                "args": {
+                                    "request": "sensitive acne-prone skin routine KOL videos"
+                                },
+                                "name": "kol_content_agent"
+                            }
+                        ],
+                        "intermediate_responses": []
+                    }
+                }
+            ],
+            "session_input": {
+                "app_name": "skincare_advisor",
+                "user_id": "eval_user",
+                "state": {}
+            }
+        },
+        {
+            "eval_id": "route_reviewed_anti_aging_routine",
+            "conversation": [
+                {
+                    "invocation_id": "inv-review-002",
+                    "user_content": {
+                        "parts": [
+                            {
+                                "text": "I need a safe anti-aging routine with retinol and AHA. Make sure the ingredients don't conflict with each other."
+                            }
+                        ],
+                        "role": "user"
+                    },
+                    "final_response": {
+                        "parts": [
+                            {
+                                "text": "Here's your reviewed anti-aging routine. The critic identified that retinol and AHA shouldn't be used in the same step, so they've been separated into alternating nights to avoid irritation. SPF is included in the morning routine."
+                            }
+                        ],
+                        "role": "model"
+                    },
+                    "intermediate_data": {
+                        "tool_uses": [
+                            {
+                                "args": {
+                                    "request": "Safe anti-aging routine with retinol and AHA, no ingredient conflicts"
+                                },
+                                "name": "routine_review_agent"
+                            },
+                            {
+                                "args": {
+                                    "request": "anti-aging retinol AHA routine KOL videos"
+                                },
+                                "name": "kol_content_agent"
+                            }
+                        ],
+                        "intermediate_responses": []
+                    }
+                }
+            ],
+            "session_input": {
+                "app_name": "skincare_advisor",
+                "user_id": "eval_user",
+                "state": {}
+            }
+        },
+        {
+            "eval_id": "route_complex_multi_step_routine",
+            "conversation": [
+                {
+                    "invocation_id": "inv-review-003",
+                    "user_content": {
+                        "parts": [
+                            {
+                                "text": "Create a comprehensive, thoroughly reviewed AM and PM skincare routine for combination skin with rosacea. I want to make sure everything is safe together."
+                            }
+                        ],
+                        "role": "user"
+                    },
+                    "final_response": {
+                        "parts": [
+                            {
+                                "text": "Here's your thoroughly reviewed AM and PM routine for combination skin with rosacea. The safety review verified proper ingredient ordering, no conflicts, and includes gentler alternatives for rosacea-sensitive areas."
+                            }
+                        ],
+                        "role": "model"
+                    },
+                    "intermediate_data": {
+                        "tool_uses": [
+                            {
+                                "args": {
+                                    "request": "Reviewed AM and PM routine for combination skin with rosacea"
+                                },
+                                "name": "routine_review_agent"
+                            },
+                            {
+                                "args": {
+                                    "request": "combination skin rosacea routine KOL videos"
+                                },
+                                "name": "kol_content_agent"
+                            }
+                        ],
+                        "intermediate_responses": []
+                    }
+                }
+            ],
+            "session_input": {
+                "app_name": "skincare_advisor",
+                "user_id": "eval_user",
+                "state": {}
+            }
+        }
+    ]
+}

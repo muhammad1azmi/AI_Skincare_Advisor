@@ -3,14 +3,17 @@
 This server implements the ADK Gemini Live API Bidi-Streaming lifecycle
 for real-time voice/video skincare consultations.
 
+Usage:
+- LOCAL DEV:  python -m server.main  (InMemory session/memory)
+- WITH AE:   Set AGENT_ENGINE_ID in .env (VertexAi session/memory)
+- PRODUCTION: python scripts/deploy.py (Agent Engine Runtime)
+
 Architecture:
 - ADK App with BigQuery Agent Analytics Plugin for observability
 - OpenTelemetry distributed tracing (trace_id, span_id)
 - Firebase Auth JWT verification on WebSocket connections
 - CORS restricted to allowed origins only
-- No secrets in code (all from env vars)
-- Non-root container user (Dockerfile)
-- VertexAiSessionService for persistent, managed sessions
+- Dual-mode: VertexAi or InMemory services based on AGENT_ENGINE_ID
 
 5-Phase Lifecycle:
 1. App Init — Create Agent, App (w/ BQ plugin), Runner
@@ -41,7 +44,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from google.adk.apps import App
 from google.adk.agents.run_config import RunConfig, StreamingMode
-from google.adk.sessions import VertexAiSessionService
+from google.adk.sessions import VertexAiSessionService, InMemorySessionService
+from google.adk.memory import VertexAiMemoryBankService, InMemoryMemoryService
 from google.adk.agents.live_request_queue import LiveRequestQueue
 from google.adk.plugins.bigquery_agent_analytics_plugin import (
     BigQueryAgentAnalyticsPlugin,
@@ -115,12 +119,27 @@ bq_plugin = BigQueryAgentAnalyticsPlugin(
     location=_LOCATION,
 )
 
-# Session service — Vertex AI Agent Engine managed sessions
-session_service = VertexAiSessionService(
-    project=_PROJECT_ID,
-    location=_LOCATION,
-    agent_engine_id=os.environ.get("AGENT_ENGINE_ID"),
-)
+# Session & Memory services — dual mode (Vertex AI or InMemory)
+_AGENT_ENGINE_ID = os.environ.get("AGENT_ENGINE_ID")
+
+if _AGENT_ENGINE_ID:
+    # Production mode: Vertex AI Agent Engine managed services
+    session_service = VertexAiSessionService(
+        project=_PROJECT_ID,
+        location=_LOCATION,
+        agent_engine_id=_AGENT_ENGINE_ID,
+    )
+    memory_service = VertexAiMemoryBankService(
+        project=_PROJECT_ID,
+        location=_LOCATION,
+        agent_engine_id=_AGENT_ENGINE_ID,
+    )
+    logger.info("Vertex AI services initialized (Agent Engine: %s)", _AGENT_ENGINE_ID)
+else:
+    # Local dev mode: InMemory services (no GCP dependency)
+    session_service = InMemorySessionService()
+    memory_service = InMemoryMemoryService()
+    logger.info("Local dev mode — using InMemory session/memory services")
 
 # ADK App with BigQuery Analytics plugin (replaces raw Runner)
 adk_app = App(
@@ -128,6 +147,7 @@ adk_app = App(
     root_agent=root_agent,
     plugins=[bq_plugin],
     session_service=session_service,
+    memory_service=memory_service,
 )
 runner = adk_app.runner
 
@@ -167,8 +187,10 @@ async def health_check():
         "app": "AI Skincare Advisor",
         "version": "1.0.0",
         "model": root_agent.model,
-        "session_service": "VertexAiSessionService",
-        "agent_engine_id": os.environ.get("AGENT_ENGINE_ID", "not_set"),
+        "session_service": type(session_service).__name__,
+        "memory_service": type(memory_service).__name__,
+        "mode": "agent_engine" if _AGENT_ENGINE_ID else "local_dev",
+        "agent_engine_id": _AGENT_ENGINE_ID or "not_set",
         "plugins": ["BigQueryAgentAnalyticsPlugin"],
         "active_sessions": len(active_queues),
         "agents": [
@@ -183,7 +205,7 @@ async def health_check():
             "progress_tracker (FunctionTool)",
         ],
         "grounding": "Vertex AI Search datastores (5 agents)",
-        "safety": "before_model_callback medical guardrail",
+        "safety": "Model Armor (PI, PII/SDP, RAI, malicious URIs) + medical guardrail",
     }
 
 
@@ -222,6 +244,126 @@ async def send_push_notification(data: dict):
         data=data.get("data"),
     )
     return {"status": "sent" if result else "failed"}
+
+
+@web_app.get("/api/sessions/{user_id}")
+async def list_user_sessions(user_id: str, token: str = ""):
+    """List all past sessions for a user.
+
+    Query params:
+        token: Firebase ID token for authentication.
+
+    Returns list of session metadata.
+    """
+    # Skip auth in local dev
+    if os.environ.get("SKIP_AUTH", "").lower() != "true":
+        if not token:
+            return {"error": "Authentication required"}, 401
+        from server.auth import verify_firebase_token
+        firebase_user = verify_firebase_token(token)
+        if firebase_user is None:
+            return {"error": "Invalid or expired token"}, 401
+        # Prevent impersonation — enforce matching UID
+        if firebase_user["uid"] != user_id:
+            return {"error": "Forbidden"}, 403
+
+    try:
+        sessions = await session_service.list_sessions(
+            app_name="skincare_advisor",
+            user_id=user_id,
+        )
+
+        session_list = []
+        for s in (sessions or []):
+            # Extract last message preview from session events
+            last_message = ""
+            message_count = 0
+            if hasattr(s, "events") and s.events:
+                for event in reversed(s.events):
+                    message_count += 1
+                    if hasattr(event, "content") and event.content:
+                        for part in event.content.parts:
+                            if hasattr(part, "text") and part.text:
+                                last_message = part.text[:100]
+                                break
+                    if last_message:
+                        break
+
+            session_list.append({
+                "session_id": s.id,
+                "create_time": getattr(s, "create_time", None),
+                "last_update_time": getattr(s, "last_update_time", None),
+                "last_message": last_message or "Voice/image consultation",
+                "message_count": message_count,
+            })
+
+        return {"sessions": session_list, "total": len(session_list)}
+
+    except Exception as e:
+        logger.error(f"Failed to list sessions for {user_id}: {e}")
+        return {"sessions": [], "total": 0}
+
+
+@web_app.post("/api/trigger-reminders")
+async def trigger_reminders(data: dict = {}):
+    """Trigger routine reminders and personalized product deals for all users.
+
+    Designed to be called by Cloud Scheduler (or manually in dev).
+
+    Body (optional):
+        routine_type: "morning" | "evening"
+        include_deals: true  — include personalized product discount notifications
+        concerns: ["acne", "oily"]  — override skin concerns (otherwise read from session)
+    """
+    from server.notifications import (
+        send_routine_reminder,
+        send_product_discount,
+    )
+
+    routine_type = data.get("routine_type", "morning")
+    include_deals = data.get("include_deals", True)
+    override_concerns = data.get("concerns")  # optional manual override
+    results = {"sent": 0, "failed": 0, "deals_sent": 0}
+
+    for idx, (uid, token) in enumerate(fcm_tokens.items()):
+        # Send routine reminder
+        ok = await send_routine_reminder(token=token, routine_type=routine_type)
+        if ok:
+            results["sent"] += 1
+        else:
+            results["failed"] += 1
+
+        # Send personalized product discount
+        if include_deals:
+            # Try to read user's skin concerns from their latest session
+            user_concerns = override_concerns
+            if not user_concerns:
+                try:
+                    sessions = await session_service.list_sessions(
+                        app_name="skincare_advisor", user_id=uid,
+                    )
+                    if sessions:
+                        latest = sessions[-1]
+                        state = getattr(latest, "state", {}) or {}
+                        # The agent stores skin analysis results in session state
+                        analysis = state.get("latest_analysis", {})
+                        if isinstance(analysis, dict):
+                            user_concerns = analysis.get("concerns", [])
+                        if not user_concerns:
+                            user_concerns = state.get("skin_concerns", [])
+                except Exception as e:
+                    logger.debug(f"Could not read session for {uid}: {e}")
+
+            deal_ok = await send_product_discount(
+                token=token,
+                concerns=user_concerns,
+                deal_index=idx,
+            )
+            if deal_ok:
+                results["deals_sent"] += 1
+
+    logger.info(f"Trigger-reminders complete: {results}")
+    return results
 
 
 @web_app.websocket("/ws/{user_id}/{session_id}")

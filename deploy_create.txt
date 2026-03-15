@@ -1,0 +1,35 @@
+﻿python : Traceback (most recent call last):
+At line:1 char:1
++ python -c "
++ ~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: 
+    (Traceback (most recent call last)::St  
+  ring) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommand 
+   Error
+ 
+  File "<string>", line 24, in <module>
+    agent_engine = 
+client.agent_engines.create(
+        agent=adk_app,
+    ...<16 lines>...
+        },
+    )
+  File "C:\Users\azmis\AppData\Local\Program
+s\Python\Python313\Lib\site-packages\vertexa
+i\_genai\agent_engines.py", line 983, in 
+create
+    raise RuntimeError(f"Failed to create 
+Agent Engine: {operation.error}")
+RuntimeError: Failed to create Agent 
+Engine: {'code': 3, 'message': 'Reasoning 
+Engine resource [projects/1089521368524/loca
+tions/us-central1/reasoningEngines/378657620
+9060560896] failed to start and cannot 
+serve traffic. Please refer to our 
+documentation (https://cloud.google.com/vert
+ex-ai/generative-ai/docs/agent-engine/troubl
+eshooting/deploy) for checking logs and 
+other troubleshooting tips.'}
+Creating NEW Agent Engine instance...
+FULL ERROR: Failed to create Agent Engine: {'code': 3, 'message': 'Reasoning Engine resource [projects/1089521368524/locations/us-central1/reasoningEngines/3786576209060560896] failed to start and cannot serve traffic. Please refer to our documentation (https://cloud.google.com/vertex-ai/generative-ai/docs/agent-engine/troubleshooting/deploy) for checking logs and other troubleshooting tips.'}

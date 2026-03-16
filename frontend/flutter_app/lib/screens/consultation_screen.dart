@@ -88,7 +88,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
     // --- Configure audio session for simultaneous recording + playback ---
     try {
       final session = await AudioSession.instance;
-      await session.configure(const AudioSessionConfiguration(
+      await session.configure(AudioSessionConfiguration(
         avAudioSessionCategory: AVAudioSessionCategory.playAndRecord,
         avAudioSessionCategoryOptions: AVAudioSessionCategoryOptions.defaultToSpeaker |
             AVAudioSessionCategoryOptions.allowBluetooth,
@@ -887,24 +887,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
   }
 }
 
-/// In-memory audio source for just_audio.
-class _InMemoryAudioSource extends StreamAudioSource {
-  final Uint8List _data;
-  _InMemoryAudioSource(this._data);
 
-  @override
-  Future<StreamAudioResponse> request([int? start, int? end]) async {
-    final s = start ?? 0;
-    final e = end ?? _data.length;
-    return StreamAudioResponse(
-      sourceLength: _data.length,
-      contentLength: e - s,
-      offset: s,
-      stream: Stream.value(_data.sublist(s, e)),
-      contentType: 'audio/wav',
-    );
-  }
-}
 
 /// Compact chip showing a modality state (See / Hear / Speak).
 class _ModalityChip extends StatelessWidget {

@@ -251,6 +251,81 @@ For local development, update `lib/config.dart` to point to `ws://YOUR_LOCAL_IP:
 
 ---
 
+## 🧪 Reproducible Testing (For Judges)
+
+### Option A: Test the Live Deployed Backend (Fastest)
+
+The backend is already deployed on Cloud Run. You can test it immediately:
+
+```bash
+# 1. Install websockets
+pip install websockets
+
+# 2. Run the WebSocket test script — connects to the live Cloud Run service,
+#    sends a skincare question, and prints the AI's streamed response
+python scripts/test_websocket.py
+```
+
+This sends a real query ("Hello, can you recommend a good sunscreen?") to the live deployed agent and streams the response back.
+
+**Expected output:**
+```
+✅ Connected! Sending a text message...
+Sent: Hello, can you recommend a good sunscreen?
+Waiting for responses...
+[AI response about sunscreen recommendations]
+--- Turn complete ---
+✅ WebSocket test completed successfully!
+```
+
+### Option B: Run the Backend Locally
+
+```bash
+# 1. Clone and install
+git clone https://github.com/muhammad1azmi/AI_Skincare_Advisor.git
+cd AI_Skincare_Advisor
+python -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+
+# 2. Configure (you'll need your own GCP project with Vertex AI enabled)
+cp .env.example .env
+# Edit .env with your GOOGLE_CLOUD_PROJECT, AGENT_ENGINE_ID
+
+# 3. Authenticate
+gcloud auth application-default login
+
+# 4. Run the server
+export SKIP_AUTH=true
+uvicorn server.main:app --host 0.0.0.0 --port 8080 --reload
+```
+
+### Option C: Run Agent Evaluations
+
+```bash
+# Run the ADK evaluation suite — tests routing accuracy,
+# safety guardrails, and response quality
+cd app
+python -m pytest skincare_advisor/tests/ -v
+```
+
+**What the evals test:**
+- ✅ Routing accuracy — correct specialist agent is selected for each query type
+- ✅ Safety guardrails — medical/prescription requests are properly deflected
+- ✅ Response quality — recommendations are relevant and appropriately cautious
+
+### Option D: Build & Run the Flutter App
+
+```bash
+cd frontend/flutter_app
+flutter pub get
+flutter run  # Requires Android device/emulator
+```
+
+The app connects to the Cloud Run backend via WebSocket. On the consultation screen, grant camera and microphone permissions to start a live voice+video skincare consultation.
+
+---
+
 ## ☁️ Deploy to Google Cloud
 
 ### Automated Deployment (IaC)

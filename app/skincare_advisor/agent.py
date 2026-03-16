@@ -238,9 +238,10 @@ def _output_safety_check(callback_context, llm_response):
 
 
 # ─── Root Orchestrator Agent ───
-# Using `sub_agents` (agent transfer) instead of `AgentTool` for
-# Gemini Live API compatibility. ADK auto-enables audio transcription
-# for context transfer between agents in live streaming mode.
+# NOTE: sub_agents are NOT used with the native-audio live model because:
+# 1. The model verbalizes "calls tool: <agent>" as speech instead of silently transferring
+# 2. Sub-agents with VertexAiSearchTool crash the live session
+# The root agent's comprehensive prompt provides excellent skincare advice directly.
 root_agent = Agent(
     name="skincare_advisor",
     model="gemini-live-2.5-flash-native-audio",
@@ -273,20 +274,6 @@ root_agent = Agent(
         # Memory Bank — retrieves user memories (skin type, preferences,
         # concerns, routine history) at the start of every turn
         PreloadMemoryTool(),
-    ],
-    # Sub-agents — ADK agent transfer pattern for live streaming
-    sub_agents=[
-        skin_analyzer_agent,
-        routine_builder_agent,
-        ingredient_checker_agent,
-        ingredient_interaction_agent,
-        skin_condition_agent,
-        qa_agent,
-        kol_content_agent,
-        progress_tracker_agent,
-        parallel_ingredient_agent,
-        consultation_pipeline_agent,
-        routine_review_agent,
     ],
     before_model_callback=_safety_guardrail,
     after_model_callback=_output_safety_check,

@@ -84,6 +84,18 @@ jobs:
           # Create key.properties for Gradle (in android/app/ where build.gradle.kts lives)
           printf "storePassword=${KEYSTORE_PASSWORD:-android}\nkeyPassword=${KEY_PASSWORD:-android}\nkeyAlias=release\nstoreFile=release.keystore\n" > frontend/flutter_app/android/app/key.properties
 
+      - name: Decode google-services.json
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            echo "$GOOGLE_SERVICES_JSON" | base64 -d > frontend/flutter_app/android/app/google-services.json
+            echo "✅ google-services.json decoded from secret"
+          else
+            echo "❌ GOOGLE_SERVICES_JSON secret not set — build will fail"
+            exit 1
+          fi
+
       - name: Install dependencies
         working-directory: frontend/flutter_app
         run: flutter pub get

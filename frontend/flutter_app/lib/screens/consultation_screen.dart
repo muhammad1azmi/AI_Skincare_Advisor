@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:camera/camera.dart';
@@ -7,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:audio_session/audio_session.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -83,6 +85,24 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
   }
 
   Future<void> _initializeAll() async {
+    // --- Configure audio session for simultaneous recording + playback ---
+    try {
+      final session = await AudioSession.instance;
+      await session.configure(const AudioSessionConfiguration(
+        avAudioSessionCategory: AVAudioSessionCategory.playAndRecord,
+        avAudioSessionCategoryOptions: AVAudioSessionCategoryOptions.defaultToSpeaker |
+            AVAudioSessionCategoryOptions.allowBluetooth,
+        androidAudioAttributes: AndroidAudioAttributes(
+          contentType: AndroidAudioContentType.speech,
+          usage: AndroidAudioUsage.voiceCommunication,
+        ),
+        androidAudioFocusGainType: AndroidAudioFocusGainType.gain,
+      ));
+      debugPrint('[Audio Session] Configured for playAndRecord + speaker');
+    } catch (e) {
+      debugPrint('[Audio Session] Config error: $e');
+    }
+
     // --- Check permissions first ---
     final micStatus = await Permission.microphone.request();
     final camStatus = await Permission.camera.request();
@@ -160,8 +180,9 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
           // Output transcription (what the AI is saying as text)
           if (event.outputTranscriptionText != null &&
               event.outputTranscriptionText!.isNotEmpty) {
-            _partialAiTranscript += event.outputTranscriptionText!;
-            _transcript = _partialAiTranscript;
+             // Replace (not append) — API may send full accumulated text
+             _partialAiTranscript = event.outputTranscriptionText!;
+             _transcript = _partialAiTranscript;
             _aiSpeaking = event.outputTranscriptionFinished != true;
 
             if (event.outputTranscriptionFinished == true) {
@@ -179,8 +200,9 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
           // Input transcription (what the user said)
           if (event.inputTranscriptionText != null &&
               event.inputTranscriptionText!.isNotEmpty) {
-            _partialUserTranscript += event.inputTranscriptionText!;
-            _userTranscript = _partialUserTranscript;
+             // Replace (not append) — API may send full accumulated text
+             _partialUserTranscript = event.inputTranscriptionText!;
+             _userTranscript = _partialUserTranscript;
 
             if (event.inputTranscriptionFinished == true) {
               final msg = ChatMessage(
@@ -263,14 +285,26 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
       try {
         // Create WAV from merged PCM (24kHz, 16-bit, mono — Gemini Live output format).
         final wavBytes = _createWavFromPcm(merged, 24000, 1, 16);
-        final source = _InMemoryAudioSource(wavBytes);
-        await _audioPlayer.setAudioSource(source);
+
+        // Write to temp file (more reliable than StreamAudioSource on Android).
+        final tempDir = Directory.systemTemp;
+        final tempFile = File('${tempDir.path}/glow_audio_${DateTime.now().millisecondsSinceEpoch}.wav');
+        await tempFile.writeAsBytes(wavBytes);
+        debugPrint('[Audio] Wrote ${wavBytes.length} bytes to ${tempFile.path}');
+
+        await _audioPlayer.setVolume(1.0);
+        await _audioPlayer.setFilePath(tempFile.path);
         await _audioPlayer.play();
 
         // Wait for playback to finish.
         await _audioPlayer.playerStateStream.firstWhere(
           (state) => state.processingState == ProcessingState.completed,
         );
+
+        debugPrint('[Audio] Playback completed');
+
+        // Cleanup temp file.
+        try { await tempFile.delete(); } catch (_) {}
       } catch (e) {
         debugPrint('[Audio Playback] Play error: $e');
       }
@@ -280,6 +314,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
     }
 
     _isPlayingAudio = false;
+    if (mounted) setState(() => _aiSpeaking = false);
   }
 
   /// Create a minimal WAV file from raw PCM bytes.

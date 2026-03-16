@@ -34,9 +34,22 @@ Thumbs.db
 
 # Logs & debug output
 *.log
+*.txt
+!requirements.txt
+!README.txt
 cloud_run_logs.txt
 stderr_logs.txt
 ws_results*.txt
+error_logs*.json
+
+# Deploy/eval output files
+deploy_*.txt
+eval_*.log
+armor_logs.txt
+diag_logs.txt
+
+# Firebase credentials (sensitive)
+google-services.json
 
 # Deprecated build configs
 Dockerfile.flutter

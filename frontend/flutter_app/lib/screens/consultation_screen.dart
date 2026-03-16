@@ -1,15 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_sound/flutter_sound.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:audio_session/audio_session.dart';
-import 'package:just_audio/just_audio.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import 'chat_screen.dart';
@@ -40,7 +38,8 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
   final AudioService _audioService = AudioService();
   final ChatHistoryService _historyService = ChatHistoryService();
   final CameraService _cameraService = CameraService();
-  final AudioPlayer _audioPlayer = AudioPlayer();
+  final FlutterSoundPlayer _soundPlayer = FlutterSoundPlayer();
+  bool _playerOpen = false;
 
   // State
   bool _isConnecting = true;
@@ -63,9 +62,8 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
   String _partialAiTranscript = '';
   String _partialUserTranscript = '';
 
-  // Audio playback queue for PCM chunks
-  final List<Uint8List> _audioQueue = [];
-  bool _isPlayingAudio = false;
+  // Audio playback subscription for binary PCM frames
+  StreamSubscription<Uint8List>? _audioByteSub;
 
   // Streaming subscriptions
   StreamSubscription<String>? _audioSub;
@@ -85,22 +83,13 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
   }
 
   Future<void> _initializeAll() async {
-    // --- Configure audio session for simultaneous recording + playback ---
+    // --- Open flutter_sound player for streaming PCM playback ---
     try {
-      final session = await AudioSession.instance;
-      await session.configure(AudioSessionConfiguration(
-        avAudioSessionCategory: AVAudioSessionCategory.playAndRecord,
-        avAudioSessionCategoryOptions: AVAudioSessionCategoryOptions.defaultToSpeaker |
-            AVAudioSessionCategoryOptions.allowBluetooth,
-        androidAudioAttributes: AndroidAudioAttributes(
-          contentType: AndroidAudioContentType.speech,
-          usage: AndroidAudioUsage.voiceCommunication,
-        ),
-        androidAudioFocusGainType: AndroidAudioFocusGainType.gain,
-      ));
-      debugPrint('[Audio Session] Configured for playAndRecord + speaker');
+      await _soundPlayer.openPlayer();
+      _playerOpen = true;
+      debugPrint('[Audio] FlutterSoundPlayer opened');
     } catch (e) {
-      debugPrint('[Audio Session] Config error: $e');
+      debugPrint('[Audio] Player open error: $e');
     }
 
     // --- Check permissions first ---
@@ -171,11 +160,8 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
             _persistMessage(msg);
           }
 
-          // Audio response → decode, buffer, and play
-          if (event.audioBase64 != null) {
-            _aiSpeaking = true;
-            _playAudioChunk(event.audioBase64!);
-          }
+          // Audio is now received on the binary audioBytes stream,
+          // not as base64 in ADK events.
 
           // Output transcription (what the AI is saying as text)
           if (event.outputTranscriptionText != null &&
@@ -216,17 +202,22 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
             }
           }
 
-          // Turn complete → AI stopped speaking
+          // Turn complete → AI stopped speaking, stop playback stream
           if (event.turnComplete == true) {
             _aiSpeaking = false;
+            _stopPlaybackStream();
           }
 
-          // Interrupted → AI was cut off
+          // Interrupted → AI was cut off, stop playback stream
           if (event.interrupted == true) {
             _aiSpeaking = false;
+            _stopPlaybackStream();
           }
         });
       });
+
+      // Listen for binary PCM audio from server.
+      _startAudioPlaybackStream();
 
       // Start audio recording → binary PCM frames to WebSocket.
       _startAudioStreaming();
@@ -244,123 +235,43 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
     }
   }
 
-  /// Play a chunk of base64-encoded PCM audio from the AI.
-  Future<void> _playAudioChunk(String base64Audio) async {
-    try {
-      final bytes = base64Decode(base64Audio);
-      _audioQueue.add(Uint8List.fromList(bytes));
-      debugPrint('[Audio] Queued chunk: ${bytes.length} bytes, queue size: ${_audioQueue.length}');
+  /// Start listening for binary PCM audio frames from the server.
+  void _startAudioPlaybackStream() {
+    _audioByteSub = _wsService!.audioBytes.listen((pcmBytes) {
+      if (!_playerOpen) return;
+      // Start the player stream if not already playing.
+      if (!_soundPlayer.isPlaying) {
+        _soundPlayer.startPlayerFromStream(
+          codec: Codec.pcm16,
+          numChannels: 1,
+          sampleRate: 24000,
+        ).then((_) {
+          debugPrint('[Audio] Player stream started');
+          // Feed the first chunk after starting.
+          _soundPlayer.foodSink?.add(FoodData(pcmBytes));
+        }).catchError((e) {
+          debugPrint('[Audio] startPlayerFromStream error: $e');
+        });
+      } else {
+        // Stream already open — feed PCM data directly.
+        _soundPlayer.foodSink?.add(FoodData(pcmBytes));
+      }
+      if (mounted && !_aiSpeaking) {
+        setState(() => _aiSpeaking = true);
+      }
+    });
+  }
 
-      // Start the playback loop if not already running.
-      if (!_isPlayingAudio) {
-        _isPlayingAudio = true;
-        _processAudioQueue();
+  /// Stop the streaming playback.
+  Future<void> _stopPlaybackStream() async {
+    try {
+      if (_soundPlayer.isPlaying) {
+        await _soundPlayer.stopPlayer();
+        debugPrint('[Audio] Player stream stopped');
       }
     } catch (e) {
-      debugPrint('[Audio Playback] Error queuing: $e');
+      debugPrint('[Audio] stopPlayer error: $e');
     }
-  }
-
-  /// Process queued audio chunks sequentially.
-  Future<void> _processAudioQueue() async {
-    while (_audioQueue.isNotEmpty) {
-      // Grab all currently queued chunks and merge into one WAV.
-      final chunks = List<Uint8List>.from(_audioQueue);
-      _audioQueue.clear();
-
-      // Merge all chunks into a single PCM buffer.
-      int totalLen = 0;
-      for (final c in chunks) {
-        totalLen += c.length;
-      }
-      final merged = Uint8List(totalLen);
-      int offset = 0;
-      for (final c in chunks) {
-        merged.setRange(offset, offset + c.length, c);
-        offset += c.length;
-      }
-
-      debugPrint('[Audio] Playing ${chunks.length} chunks, ${merged.length} bytes');
-
-      try {
-        // Create WAV from merged PCM (24kHz, 16-bit, mono — Gemini Live output format).
-        final wavBytes = _createWavFromPcm(merged, 24000, 1, 16);
-
-        // Write to temp file (more reliable than StreamAudioSource on Android).
-        final tempDir = Directory.systemTemp;
-        final tempFile = File('${tempDir.path}/glow_audio_${DateTime.now().millisecondsSinceEpoch}.wav');
-        await tempFile.writeAsBytes(wavBytes);
-        debugPrint('[Audio] Wrote ${wavBytes.length} bytes to ${tempFile.path}');
-
-        await _audioPlayer.setVolume(1.0);
-        await _audioPlayer.setFilePath(tempFile.path);
-        await _audioPlayer.play();
-
-        // Wait for playback to finish.
-        await _audioPlayer.playerStateStream.firstWhere(
-          (state) => state.processingState == ProcessingState.completed,
-        );
-
-        debugPrint('[Audio] Playback completed');
-
-        // Cleanup temp file.
-        try { await tempFile.delete(); } catch (_) {}
-      } catch (e) {
-        debugPrint('[Audio Playback] Play error: $e');
-      }
-
-      // Small delay to let more chunks accumulate for smoother playback.
-      await Future.delayed(const Duration(milliseconds: 50));
-    }
-
-    _isPlayingAudio = false;
-    if (mounted) setState(() => _aiSpeaking = false);
-  }
-
-  /// Create a minimal WAV file from raw PCM bytes.
-  Uint8List _createWavFromPcm(
-      Uint8List pcmData, int sampleRate, int channels, int bitsPerSample) {
-    final dataSize = pcmData.length;
-    final byteRate = sampleRate * channels * (bitsPerSample ~/ 8);
-    final blockAlign = channels * (bitsPerSample ~/ 8);
-    final header = ByteData(44);
-
-    // RIFF header
-    header.setUint8(0, 0x52); // R
-    header.setUint8(1, 0x49); // I
-    header.setUint8(2, 0x46); // F
-    header.setUint8(3, 0x46); // F
-    header.setUint32(4, 36 + dataSize, Endian.little);
-    header.setUint8(8, 0x57); // W
-    header.setUint8(9, 0x41); // A
-    header.setUint8(10, 0x56); // V
-    header.setUint8(11, 0x45); // E
-
-    // fmt chunk
-    header.setUint8(12, 0x66); // f
-    header.setUint8(13, 0x6d); // m
-    header.setUint8(14, 0x74); // t
-    header.setUint8(15, 0x20); // (space)
-    header.setUint32(16, 16, Endian.little); // chunk size
-    header.setUint16(20, 1, Endian.little); // PCM format
-    header.setUint16(22, channels, Endian.little);
-    header.setUint32(24, sampleRate, Endian.little);
-    header.setUint32(28, byteRate, Endian.little);
-    header.setUint16(32, blockAlign, Endian.little);
-    header.setUint16(34, bitsPerSample, Endian.little);
-
-    // data chunk
-    header.setUint8(36, 0x64); // d
-    header.setUint8(37, 0x61); // a
-    header.setUint8(38, 0x74); // t
-    header.setUint8(39, 0x61); // a
-    header.setUint32(40, dataSize, Endian.little);
-
-    // Combine header + PCM data
-    final wav = Uint8List(44 + dataSize);
-    wav.setRange(0, 44, header.buffer.asUint8List());
-    wav.setRange(44, 44 + dataSize, pcmData);
-    return wav;
   }
 
   String get _formattedCallTime {
@@ -468,7 +379,12 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
     _stopCameraStreaming();
     _audioService.dispose();
     _cameraService.dispose();
-    _audioPlayer.dispose();
+    _audioByteSub?.cancel();
+    _stopPlaybackStream();
+    if (_playerOpen) {
+      _soundPlayer.closePlayer();
+      _playerOpen = false;
+    }
     _pulseController.dispose();
     _wsService?.sendEnd();
     _wsService?.disconnect();

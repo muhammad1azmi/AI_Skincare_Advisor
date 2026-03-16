@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
@@ -94,7 +95,8 @@ class AdkEvent {
 /// - Text frames (JSON): `{"type": "end"}` to close session
 ///
 /// Protocol (Server → Flutter):
-/// - Text frames: Full ADK event JSON (parsed into AdkEvent)
+/// - Binary frames: Raw PCM audio bytes (24kHz, 16-bit, mono)
+/// - Text frames: ADK event JSON (transcription, text, turn_complete)
 class WebSocketService {
   final String userId;
   final String sessionId;
@@ -102,6 +104,7 @@ class WebSocketService {
 
   WebSocketChannel? _channel;
   StreamController<AdkEvent>? _eventController;
+  StreamController<Uint8List>? _audioController;
   bool _isConnected = false;
   int _reconnectAttempts = 0;
   static const int _maxReconnectAttempts = 5;
@@ -112,9 +115,13 @@ class WebSocketService {
     this.authToken,
   });
 
-  /// Stream of parsed ADK events from the server.
+  /// Stream of parsed ADK events from the server (text frames).
   Stream<AdkEvent> get events =>
       _eventController?.stream ?? const Stream.empty();
+
+  /// Stream of raw PCM audio bytes from the server (binary frames).
+  Stream<Uint8List> get audioBytes =>
+      _audioController?.stream ?? const Stream.empty();
 
   /// Whether the WebSocket is currently connected.
   bool get isConnected => _isConnected;
@@ -123,6 +130,8 @@ class WebSocketService {
   Future<void> connect() async {
     _eventController?.close();
     _eventController = StreamController<AdkEvent>.broadcast();
+    _audioController?.close();
+    _audioController = StreamController<Uint8List>.broadcast();
 
     var url = AppConfig.wsUrl(userId, sessionId);
     if (authToken != null) {
@@ -141,7 +150,7 @@ class WebSocketService {
       _channel!.stream.listen(
         (message) {
           if (message is String) {
-            // Text frame = ADK event JSON
+            // Text frame = ADK event JSON (transcription, text, turn_complete)
             try {
               final json = jsonDecode(message) as Map<String, dynamic>;
               final event = AdkEvent.fromJson(json);
@@ -149,8 +158,10 @@ class WebSocketService {
             } catch (e) {
               debugPrint('[WS] Failed to parse event: $e');
             }
+          } else if (message is List<int>) {
+            // Binary frame = raw PCM audio bytes from Gemini output
+            _audioController?.add(Uint8List.fromList(message));
           }
-          // Binary frames from server are not expected in current protocol
         },
         onError: (error) {
           debugPrint('[WS] Error: $error');
@@ -212,6 +223,8 @@ class WebSocketService {
     _channel = null;
     _eventController?.close();
     _eventController = null;
+    _audioController?.close();
+    _audioController = null;
     debugPrint('[WS] Disconnected');
   }
 

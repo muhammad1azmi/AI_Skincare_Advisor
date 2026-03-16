@@ -489,31 +489,47 @@ async def websocket_streaming(websocket: WebSocket, user_id: str, session_id: st
                     live_request_queue=live_request_queue,
                     run_config=run_config,
                 ):
-                    event_json = event.model_dump_json(exclude_none=True, by_alias=True)
-                    # Debug: inspect event structure
-                    try:
-                        parsed = json.loads(event_json)
-                        has_audio = False
-                        has_text = False
-                        has_input_tx = 'inputTranscription' in parsed or 'input_transcription' in parsed
-                        has_output_tx = 'outputTranscription' in parsed or 'output_transcription' in parsed
-                        content = parsed.get('content', {})
-                        parts = content.get('parts', []) if isinstance(content, dict) else []
-                        for part in parts:
-                            if isinstance(part, dict):
-                                if 'inlineData' in part or 'inline_data' in part:
-                                    has_audio = True
-                                    inline = part.get('inlineData') or part.get('inline_data', {})
-                                    mime = inline.get('mimeType') or inline.get('mime_type', 'unknown')
-                                    data_len = len(inline.get('data', ''))
-                                    logger.info(f"Session {session_id}: Event has AUDIO: mime={mime}, data_len={data_len}")
-                                if 'text' in part:
-                                    has_text = True
-                        if not has_audio:
-                            logger.debug(f"Session {session_id}: Event keys={list(parsed.keys())}, has_text={has_text}, input_tx={has_input_tx}, output_tx={has_output_tx}")
-                    except Exception:
-                        pass
-                    await websocket.send_text(event_json)
+                    # Split audio (binary frames) from non-audio (JSON text frames).
+                    # This avoids base64 encoding overhead for audio data.
+                    sent_audio = False
+                    if event.content and event.content.parts:
+                        for part in event.content.parts:
+                            if (part.inline_data
+                                    and part.inline_data.mime_type
+                                    and part.inline_data.mime_type.startswith("audio/")):
+                                # Send raw PCM bytes as binary WebSocket frame
+                                await websocket.send_bytes(part.inline_data.data)
+                                sent_audio = True
+
+                    # For non-audio events (transcription, text, turn_complete, etc.)
+                    # or events that have BOTH audio and text content, send JSON.
+                    # We strip inline_data from JSON to avoid double-sending audio.
+                    if not sent_audio:
+                        event_json = event.model_dump_json(exclude_none=True, by_alias=True)
+                        await websocket.send_text(event_json)
+                    else:
+                        # Audio was sent as binary. Also check for transcription/turn_complete
+                        # in the same event and send those as JSON separately.
+                        has_transcription = (event.input_transcription is not None
+                                             or event.output_transcription is not None)
+                        has_turn_complete = getattr(event, 'turn_complete', False)
+                        if has_transcription or has_turn_complete:
+                            # Build a minimal JSON with just the non-audio fields
+                            meta = {}
+                            if event.input_transcription is not None:
+                                meta["inputTranscription"] = {
+                                    "text": event.input_transcription.text,
+                                    "finished": event.input_transcription.finished,
+                                }
+                            if event.output_transcription is not None:
+                                meta["outputTranscription"] = {
+                                    "text": event.output_transcription.text,
+                                    "finished": event.output_transcription.finished,
+                                }
+                            if has_turn_complete:
+                                meta["turnComplete"] = True
+                            await websocket.send_text(json.dumps(meta))
+
             except WebSocketDisconnect:
                 logger.info(f"Session {session_id}: Client disconnected (downstream)")
             except Exception as e:

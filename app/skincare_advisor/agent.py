@@ -238,8 +238,9 @@ def _output_safety_check(callback_context, llm_response):
 
 
 # ─── Root Orchestrator Agent ───
-# Using AgentTool instead of sub_agents to avoid Vertex AI's
-# "Multiple tools are supported only when they are all search tools" error.
+# Using `sub_agents` (agent transfer) instead of `AgentTool` for
+# Gemini Live API compatibility. ADK auto-enables audio transcription
+# for context transfer between agents in live streaming mode.
 root_agent = Agent(
     name="skincare_advisor",
     model="gemini-live-2.5-flash-native-audio",
@@ -268,15 +269,24 @@ root_agent = Agent(
             ),
         ],
     ),
-    # NOTE: AgentTool sub-agents are REMOVED for Gemini Live API compatibility.
-    # The live-native-audio model cannot invoke sub-agents that use non-live models
-    # (e.g., VertexAiSearchTool agents). This causes ConnectionClosedOK:1000 crashes.
-    # The agent still provides excellent skincare advice using its instruction prompt.
-    # TODO: Re-add tools as FunctionTools compatible with live streaming.
     tools=[
         # Memory Bank — retrieves user memories (skin type, preferences,
         # concerns, routine history) at the start of every turn
         PreloadMemoryTool(),
+    ],
+    # Sub-agents — ADK agent transfer pattern for live streaming
+    sub_agents=[
+        skin_analyzer_agent,
+        routine_builder_agent,
+        ingredient_checker_agent,
+        ingredient_interaction_agent,
+        skin_condition_agent,
+        qa_agent,
+        kol_content_agent,
+        progress_tracker_agent,
+        parallel_ingredient_agent,
+        consultation_pipeline_agent,
+        routine_review_agent,
     ],
     before_model_callback=_safety_guardrail,
     after_model_callback=_output_safety_check,

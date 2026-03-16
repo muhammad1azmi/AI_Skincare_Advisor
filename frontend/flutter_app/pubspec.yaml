@@ -24,8 +24,7 @@ dependencies:
 
   # Audio
   record: ^6.2.0
-  just_audio: ^0.10.5
-  audio_session: ^0.2.2
+  flutter_sound: ^9.30.0
 
   # Camera
   camera: ^0.12.0

@@ -243,18 +243,20 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
       if (!_soundPlayer.isPlaying) {
         _soundPlayer.startPlayerFromStream(
           codec: Codec.pcm16,
+          interleaved: false,
           numChannels: 1,
           sampleRate: 24000,
+          bufferSize: 8192,
         ).then((_) {
           debugPrint('[Audio] Player stream started');
           // Feed the first chunk after starting.
-          _soundPlayer.foodSink?.add(FoodData(pcmBytes));
+          _soundPlayer.feedFromStream(pcmBytes);
         }).catchError((e) {
           debugPrint('[Audio] startPlayerFromStream error: $e');
         });
       } else {
         // Stream already open — feed PCM data directly.
-        _soundPlayer.foodSink?.add(FoodData(pcmBytes));
+        _soundPlayer.feedFromStream(pcmBytes);
       }
       if (mounted && !_aiSpeaking) {
         setState(() => _aiSpeaking = true);

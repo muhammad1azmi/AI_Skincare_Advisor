@@ -428,19 +428,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
     return bytes;
   }
 
-  /// Stop the streaming playback.
-  Future<void> _stopPlaybackStream() async {
-    // Clear the queue and accumulator.
-    _audioPlaybackQueue.clear();
-    _pcmAccumulator.clear();
-    _isPlayingChunk = false;
-    _cooldownTimer?.cancel();
-    _playbackCooldown = false;
-    try {
-      if (_soundPlayer.isPlaying) await _soundPlayer.stopPlayer();
-    } catch (_) {}
-    debugPrint('[Audio] Turn ended');
-  }
+
 
   String get _formattedCallTime {
     final m = (_callSeconds ~/ 60).toString().padLeft(2, '0');
@@ -462,7 +450,9 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
           _isPlayingChunk ||
           _audioPlaybackQueue.isNotEmpty ||
           _playbackCooldown ||
-          _toolCallActive) return;
+          _toolCallActive) {
+        return;
+      }
 
       // Decode base64 → raw PCM bytes, then send as binary WS frame.
       final bytes = base64Decode(base64Chunk);
@@ -487,7 +477,9 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
           _aiSpeaking ||
           _isPlayingChunk ||
           _audioPlaybackQueue.isNotEmpty ||
-          _playbackCooldown) return;
+          _playbackCooldown) {
+        return;
+      }
       _wsService?.sendImage(base64Frame);
     });
   }
@@ -587,8 +579,6 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
-
     return Container(
       color: Colors.black,
       child: Stack(
@@ -707,7 +697,6 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
                       label = '🔍  Analyzing...';
                       icon = Icons.hourglass_top_rounded;
                     } else if (isSpeaking) {
-                      final glowOpacity = 0.3 + (_pulseController.value * 0.3);
                       bgColor = const Color(0xFF6C63FF).withValues(alpha: 0.85);
                       label = '✨  Glow is speaking';
                       icon = Icons.graphic_eq_rounded;
@@ -1196,58 +1185,6 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
   }
 }
 
-
-
-/// Compact chip showing a modality state (See / Hear / Speak).
-class _ModalityChip extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool active;
-
-  const _ModalityChip({
-    required this.icon,
-    required this.label,
-    required this.active,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: active
-            ? const Color(0xFF6C63FF).withValues(alpha: 0.6)
-            : Colors.white.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: active
-              ? const Color(0xFF6C63FF).withValues(alpha: 0.8)
-              : Colors.white.withValues(alpha: 0.15),
-          width: 1,
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon,
-              size: 14,
-              color: active
-                  ? Colors.white
-                  : Colors.white.withValues(alpha: 0.4)),
-          const SizedBox(width: 4),
-          Text(label,
-              style: GoogleFonts.inter(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
-                  color: active
-                      ? Colors.white
-                      : Colors.white.withValues(alpha: 0.4))),
-        ],
-      ),
-    );
-  }
-}
 
 class _CallBtn extends StatelessWidget {
   final IconData icon;

@@ -86,7 +86,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             title: 'Live Consultation',
             subtitle: 'Video-call with AI advisor\nusing camera & voice',
             gradient: const [Color(0xFF6C63FF), Color(0xFF9B8FFF)],
-            onTap: () => Navigator.pushNamed(context, AppRoutes.consultationLobby),
+            onTap: () => Navigator.pushNamed(context, AppRoutes.consultation),
           ).animate().fadeIn(delay: 200.ms, duration: 500.ms).slideY(begin: 0.1),
           const SizedBox(height: 16),
           _ActionCard(

@@ -18,6 +18,7 @@ import logging
 from google.adk.agents import Agent
 from google.adk.tools.agent_tool import AgentTool
 from google.adk.tools.preload_memory_tool import PreloadMemoryTool
+from google.adk.planners import BuiltInPlanner
 from google.adk.models import LlmResponse
 from google.genai import types
 
@@ -238,10 +239,13 @@ def _output_safety_check(callback_context, llm_response):
 
 
 # ─── Root Orchestrator Agent ───
-# NOTE: sub_agents are NOT used with the native-audio live model because:
-# 1. The model verbalizes "calls tool: <agent>" as speech instead of silently transferring
-# 2. Sub-agents with VertexAiSearchTool crash the live session
-# The root agent's comprehensive prompt provides excellent skincare advice directly.
+# Sub-agents are wrapped as AgentTool instances (NOT sub_agents / transfer_to_agent).
+# Why this works with native-audio live model:
+#   - AgentTool.run_async() creates a NEW Runner + InMemorySessionService
+#   - It calls runner.run_async() (standard async mode), NOT run_live()
+#   - Sub-agents execute in a completely independent context
+#   - VertexAiSearchTool works fine because it's not in a live session
+#   - The text result is returned to the live model like any function response
 root_agent = Agent(
     name="skincare_advisor",
     model="gemini-live-2.5-flash-native-audio",
@@ -249,6 +253,16 @@ root_agent = Agent(
                 "Routes user requests to specialized skincare agents for analysis, "
                 "routine building, ingredient checking, and KOL content recommendations.",
     instruction=_ROOT_INSTRUCTION,
+    # BuiltInPlanner enables the model to think/plan before calling tools.
+    # It uses Gemini's native thinking feature — the model reasons internally
+    # about which tool to call, what visual description to include, and how
+    # to present results. This does NOT use PlanReActPlanner because that
+    # injects /*PLANNING*/ text markers that would be spoken aloud.
+    planner=BuiltInPlanner(
+        thinking_config=types.ThinkingConfig(
+            thinking_budget=1024,
+        )
+    ),
     # Gemini built-in safety filters — defense-in-depth layer
     generate_content_config=types.GenerateContentConfig(
         safety_settings=[
@@ -271,9 +285,22 @@ root_agent = Agent(
         ],
     ),
     tools=[
-        # Memory Bank — retrieves user memories (skin type, preferences,
-        # concerns, routine history) at the start of every turn
+        # Memory Bank — retrieves user memories at the start of every turn
         PreloadMemoryTool(),
+        # ─── Sub-Agent Tools (executed via run_async in isolated context) ───
+        # Individual specialist agents
+        AgentTool(agent=skin_analyzer_agent),
+        AgentTool(agent=routine_builder_agent),
+        AgentTool(agent=ingredient_checker_agent),
+        AgentTool(agent=ingredient_interaction_agent),
+        AgentTool(agent=skin_condition_agent),
+        AgentTool(agent=qa_agent),
+        AgentTool(agent=kol_content_agent),
+        AgentTool(agent=progress_tracker_agent),
+        # Composite workflow agents (run multiple sub-agents internally)
+        AgentTool(agent=parallel_ingredient_agent),
+        AgentTool(agent=consultation_pipeline_agent),
+        AgentTool(agent=routine_review_agent),
     ],
     before_model_callback=_safety_guardrail,
     after_model_callback=_output_safety_check,

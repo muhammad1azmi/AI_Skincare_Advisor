@@ -44,3 +44,5 @@ cloudbuild-apk.yaml
 
 # Gemini
 .gemini/
+
+logs/

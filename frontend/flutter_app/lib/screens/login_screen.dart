@@ -107,14 +107,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       borderRadius: BorderRadius.circular(32),
                     ),
                     child: const Icon(
-                      Icons.face_retouching_natural,
+                      Icons.auto_awesome,
                       size: 64,
                       color: Colors.white,
                     ),
                   ),
                   const SizedBox(height: 28),
                   Text(
-                    'AI Skincare\nAdvisor',
+                    'Glow',
                     textAlign: TextAlign.center,
                     style: GoogleFonts.inter(
                       fontSize: 32,

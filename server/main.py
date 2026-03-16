@@ -66,11 +66,38 @@ from skincare_advisor.agent import root_agent
 from server.auth import verify_websocket_token
 
 # --- Structured Logging ---
-logging.basicConfig(
-    level=logging.INFO,
-    format='{"time":"%(asctime)s","level":"%(levelname)s","module":"%(module)s","message":"%(message)s"}',
+_LOG_DIR = os.path.join(_root_dir, "logs")
+os.makedirs(_LOG_DIR, exist_ok=True)
+
+_log_format = '{"time":"%(asctime)s","level":"%(levelname)s","module":"%(module)s","message":"%(message)s"}'
+
+# Console handler
+_console_handler = logging.StreamHandler()
+_console_handler.setLevel(logging.INFO)
+_console_handler.setFormatter(logging.Formatter(_log_format))
+
+# File handler — rotating, 5MB max, keep last 3 files
+from logging.handlers import RotatingFileHandler
+_file_handler = RotatingFileHandler(
+    os.path.join(_LOG_DIR, "server.log"),
+    maxBytes=5 * 1024 * 1024,  # 5 MB
+    backupCount=3,
+    encoding="utf-8",
 )
+_file_handler.setLevel(logging.INFO)  # Only meaningful events in file
+_file_handler.setFormatter(logging.Formatter(_log_format))
+
+# Root logger config
+logging.basicConfig(level=logging.INFO, handlers=[_console_handler, _file_handler])
 logger = logging.getLogger("skincare_advisor")
+
+# Silence noisy ADK & library modules that flood logs with raw audio blobs
+for _noisy in [
+    "base_llm_flow", "audio_cache_manager", "gemini_llm_connection",
+    "protocol", "connection", "connectionpool", "retry", "_channel",
+    "proactor_events", "google_llm",
+]:
+    logging.getLogger(_noisy).setLevel(logging.WARNING)
 
 # --- Phase 1: App Initialization ---
 web_app = FastAPI(
@@ -150,6 +177,18 @@ runner = Runner(
     agent=root_agent,
     plugins=[bq_plugin],
     session_service=session_service,
+    memory_service=memory_service,
+)
+
+# Live Runner — MUST use InMemorySessionService.
+# VertexAiSessionService's agent_engines.sessions.events API is incompatible
+# with run_live() and causes the live stream to close immediately.
+live_session_service = InMemorySessionService()
+live_runner = Runner(
+    app_name="skincare_advisor",
+    agent=root_agent,
+    plugins=[bq_plugin],
+    session_service=live_session_service,
     memory_service=memory_service,
 )
 
@@ -388,20 +427,20 @@ async def websocket_streaming(websocket: WebSocket, user_id: str, session_id: st
     # Top-level try/except to catch ANY crash after accept
     try:
         # --- Phase 3: Session Initialization ---
-        # VertexAI Session Service does NOT support user-provided session IDs.
-        # Always create a new session and let VertexAI auto-generate the ID.
-        logger.info(f"Session {session_id}: Creating VertexAI session...")
+        # Live sessions use InMemorySessionService (VertexAiSessionService is
+        # incompatible with run_live — its events.list() API blocks the stream).
+        logger.info(f"Session {session_id}: Creating InMemory live session...")
         try:
             session = await asyncio.wait_for(
-                session_service.create_session(
+                live_session_service.create_session(
                     app_name="skincare_advisor",
                     user_id=authenticated_user_id,
                 ),
                 timeout=30,
             )
-            # Use the VertexAI-generated session ID for all subsequent operations
+            # Use the auto-generated session ID for all subsequent operations
             actual_session_id = session.id
-            logger.info(f"Session {session_id}: Created VertexAI session {actual_session_id}")
+            logger.info(f"Session {session_id}: Created live session {actual_session_id}")
         except asyncio.TimeoutError:
             logger.error(f"Session {session_id}: Session service timed out (30s)")
             await websocket.send_text(json.dumps({"error": "session_timeout", "message": "Session service timed out"}))
@@ -426,18 +465,30 @@ async def websocket_streaming(websocket: WebSocket, user_id: str, session_id: st
             ),
             input_audio_transcription=types.AudioTranscriptionConfig(),
             output_audio_transcription=types.AudioTranscriptionConfig(),
-            max_llm_calls=500,
+            max_llm_calls=50,
         )
 
-        logger.info(f"Session {session_id}: Session ready, model={root_agent.model}")
-        await websocket.send_text(json.dumps({"type": "status", "message": "Session ready. Start speaking!"}))
+        logger.info(f"Session {session_id}: Connecting to Gemini Live, model={root_agent.model}")
+        await websocket.send_text(json.dumps({"type": "status", "message": "Connecting to Glow..."}))
+
+        # Send a minimal greeting prompt so the agent speaks first.
+        # Keep it SHORT so the model just says hi without calling tools.
+        greeting_content = types.Content(
+            role="user",
+            parts=[types.Part(text="Hi!")],
+        )
+        live_request_queue.send_content(greeting_content)
 
         # --- Phase 4: Bidi-Streaming ---
         async def upstream_task():
+            audio_chunk_count = 0
             try:
                 while True:
                     message = await websocket.receive()
                     if "bytes" in message:
+                        audio_chunk_count += 1
+                        if audio_chunk_count <= 3:
+                            logger.debug(f"Audio chunk #{audio_chunk_count} size={len(message['bytes'])} bytes")
                         audio_blob = types.Blob(mime_type="audio/pcm;rate=16000", data=message["bytes"])
                         live_request_queue.send_realtime(audio_blob)
                     elif "text" in message:
@@ -483,12 +534,59 @@ async def websocket_streaming(websocket: WebSocket, user_id: str, session_id: st
 
         async def downstream_task():
             try:
-                async for event in runner.run_live(
+                logger.debug(f"Starting run_live model={root_agent.model} user={authenticated_user_id} session={actual_session_id}")
+                event_count = 0
+                session_ready_sent = False
+                async for event in live_runner.run_live(
                     user_id=authenticated_user_id,
                     session_id=actual_session_id,
                     live_request_queue=live_request_queue,
                     run_config=run_config,
                 ):
+                    event_count += 1
+                    if event_count <= 3:
+                        logger.debug(f"Event #{event_count} content={'yes' if event.content else 'no'} partial={getattr(event, 'partial', None)} transcription_in={event.input_transcription is not None} transcription_out={event.output_transcription is not None}")
+
+                    # Send "Session ready" only once Gemini is actually responding
+                    if not session_ready_sent:
+                        session_ready_sent = True
+                        await websocket.send_text(json.dumps({"type": "status", "message": "Session ready. Start speaking!"}))
+                        logger.info(f"Session {session_id}: Gemini connected, first event received")
+                    # ── Forward sub-agent tool events to the Flutter client ──
+                    # These let the client show "Analyzing ingredients..." and
+                    # display detailed text results from sub-agent tools.
+                    if event.content and event.content.parts:
+                        for part in event.content.parts:
+                            if part.function_call:
+                                logger.info(
+                                    f"Session {session_id}: Tool call → "
+                                    f"{part.function_call.name}({part.function_call.args})"
+                                )
+                                await websocket.send_text(json.dumps({
+                                    "toolEvent": "call",
+                                    "toolName": part.function_call.name,
+                                }))
+                            elif part.function_response:
+                                # Extract the text result from the sub-agent
+                                result = part.function_response.response
+                                result_text = ""
+                                if isinstance(result, dict):
+                                    result_text = result.get("result", str(result))
+                                elif isinstance(result, str):
+                                    result_text = result
+                                else:
+                                    result_text = str(result)
+                                logger.info(
+                                    f"Session {session_id}: Tool result ← "
+                                    f"{part.function_response.name} "
+                                    f"({len(result_text)} chars)"
+                                )
+                                await websocket.send_text(json.dumps({
+                                    "toolEvent": "result",
+                                    "toolName": part.function_response.name,
+                                    "toolResult": result_text,
+                                }))
+
                     # Split audio (binary frames) from non-audio (JSON text frames).
                     # This avoids base64 encoding overhead for audio data.
                     sent_audio = False
@@ -530,10 +628,11 @@ async def websocket_streaming(websocket: WebSocket, user_id: str, session_id: st
                                 meta["turnComplete"] = True
                             await websocket.send_text(json.dumps(meta))
 
+                logger.debug(f"run_live loop ended after {event_count} events")
             except WebSocketDisconnect:
                 logger.info(f"Session {session_id}: Client disconnected (downstream)")
             except Exception as e:
-                logger.error(f"Session {session_id}: Downstream error: {traceback.format_exc()}")
+                logger.error(f"Session {session_id}: DOWNSTREAM ERROR: {traceback.format_exc()}")
                 try:
                     await websocket.send_text(json.dumps({"error": "server_error", "message": str(e)}))
                 except Exception:
@@ -565,4 +664,9 @@ if __name__ == "__main__":
         web_app,
         host="0.0.0.0",
         port=int(os.environ.get("PORT", 8080)),
+        # Increase WebSocket keepalive timeouts so long-running tool calls
+        # (e.g. routine_review_agent taking 30-60s) don't trigger
+        # "keepalive ping timeout" errors on the client connection.
+        ws_ping_interval=30,   # Send a ping every 30s (default: 20s)
+        ws_ping_timeout=120,   # Wait up to 120s for pong (default: 20s)
     )

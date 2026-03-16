@@ -179,7 +179,7 @@ class _ConsultationLobbyScreenState extends State<ConsultationLobbyScreen> {
                         ),
                       ],
                     ),
-                    child: const Icon(Icons.face_retouching_natural,
+                    child: const Icon(Icons.auto_awesome,
                         color: Colors.white, size: 48),
                   ).animate().fadeIn(duration: 500.ms).scale(
                       begin: const Offset(0.8, 0.8),

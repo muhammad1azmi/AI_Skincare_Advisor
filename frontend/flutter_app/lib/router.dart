@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 
-import 'screens/home_screen.dart';
+import 'screens/main_screen.dart';
 import 'screens/chat_screen.dart';
 import 'screens/consultation_screen.dart';
-import 'screens/consultation_lobby_screen.dart';
 import 'screens/login_screen.dart';
 
 /// App-level route names.
@@ -13,7 +12,6 @@ class AppRoutes {
   static const String login = '/login';
   static const String home = '/';
   static const String chat = '/chat';
-  static const String consultationLobby = '/consultation-lobby';
   static const String consultation = '/consultation';
 }
 
@@ -26,15 +24,13 @@ class AppRouter {
       case AppRoutes.login:
         return _fade(const LoginScreen(), settings);
       case AppRoutes.home:
-        return _fade(const HomeScreen(), settings);
+        return _fade(const MainScreen(), settings);
       case AppRoutes.chat:
         return _slide(const ChatScreen(), settings);
-      case AppRoutes.consultationLobby:
-        return _slide(const ConsultationLobbyScreen(), settings);
       case AppRoutes.consultation:
         return _slide(const ConsultationScreen(), settings);
       default:
-        return _fade(const HomeScreen(), settings);
+        return _fade(const MainScreen(), settings);
     }
   }
 

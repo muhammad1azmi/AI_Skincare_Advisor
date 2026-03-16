@@ -47,11 +47,11 @@ void main() async {
     DeviceOrientation.portraitUp,
   ]);
 
-  runApp(const ProviderScope(child: SkincareAdvisorApp()));
+  runApp(const ProviderScope(child: GlowApp()));
 }
 
-class SkincareAdvisorApp extends ConsumerWidget {
-  const SkincareAdvisorApp({super.key});
+class GlowApp extends ConsumerWidget {
+  const GlowApp({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -59,7 +59,7 @@ class SkincareAdvisorApp extends ConsumerWidget {
     final themeMode = ref.watch(themeModeProvider);
 
     return MaterialApp(
-      title: 'AI Skincare Advisor',
+      title: 'Glow',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,

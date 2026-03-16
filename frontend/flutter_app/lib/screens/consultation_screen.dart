@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:camera/camera.dart';
@@ -11,6 +12,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import 'chat_screen.dart';
+import 'main_screen.dart';
 import 'package:uuid/uuid.dart';
 
 import '../services/chat_history_service.dart';
@@ -42,16 +44,22 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
   bool _playerOpen = false;
 
   // State
-  bool _isConnecting = true;
+  bool _isConnecting = false;
   bool _isConnected = false;
+  bool _hasStarted = false; // User tapped 'Start'
   bool _isMuted = false;
   bool _isCameraOn = true;
   bool _aiSpeaking = false;
+  bool _toolCallActive = false; // Gate audio/video during tool execution
+  String? _lastToolCallName;     // Deduplicate tool call events
+  DateTime? _lastToolCallTime;
   bool _permissionDenied = false;
+  bool _showTranscript = false;
+  bool _initialized = false;
   String _transcript = '';
   String _userTranscript = '';
-  String _callStatus = 'Connecting...';
-  late final String _sessionId = const Uuid().v4();
+  String _callStatus = 'Tap Start to begin';
+  String _sessionId = const Uuid().v4();
 
   // Call timer
   Timer? _callTimer;
@@ -64,6 +72,12 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
 
   // Audio playback subscription for binary PCM frames
   StreamSubscription<Uint8List>? _audioByteSub;
+  final List<Uint8List> _audioPlaybackQueue = [];
+  final List<int> _pcmAccumulator = []; // Buffer PCM bytes for WAV playback
+  Timer? _playbackTimer; // Periodic timer to flush accumulated PCM as WAV
+  bool _isPlayingChunk = false; // Guard against overlapping playback calls
+  bool _playbackCooldown = false; // Post-playback cooldown to prevent VAD barge-in
+  Timer? _cooldownTimer;
 
   // Streaming subscriptions
   StreamSubscription<String>? _audioSub;
@@ -79,10 +93,14 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
       vsync: this,
       duration: const Duration(milliseconds: 1200),
     )..repeat(reverse: true);
-    _initializeAll();
+    // Don't auto-connect — wait for user to tap Start
   }
 
   Future<void> _initializeAll() async {
+    // Prevent duplicate initialization
+    if (_initialized) return;
+    _initialized = true;
+
     // --- Open flutter_sound player for streaming PCM playback ---
     try {
       await _soundPlayer.openPlayer();
@@ -131,33 +149,79 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
     try {
       await _wsService!.connect();
       if (!mounted) return;
+      // Keep _isConnecting = true until "Session ready" arrives.
+      // This prevents the "Connection failed" overlay from flashing.
       setState(() {
-        _isConnected = true;
-        _isConnecting = false;
-        _callStatus = 'Connected';
+        _callStatus = 'Connecting to Glow...';
       });
-
-      // Start call timer.
-      _callTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-        if (mounted) setState(() => _callSeconds++);
-      });
-
-      // Haptic feedback on connect.
-      HapticFeedback.mediumImpact();
 
       // Listen for ADK events.
       _wsService!.events.listen((event) {
         setState(() {
+          // Handle server status messages (e.g. "Session ready")
+          if (event.statusMessage != null) {
+            _callStatus = event.statusMessage!;
+            if (event.statusMessage!.contains('Session ready') && !_isConnected) {
+              _isConnected = true;
+              _isConnecting = false; // NOW it's safe to clear the connecting state
+              _callStatus = 'Connected';
+              // Start call timer only once Gemini is responding
+              _callTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+                if (mounted) setState(() => _callSeconds++);
+              });
+              HapticFeedback.mediumImpact();
+            }
+            return;
+          }
+
           // Text content from agent (non-streaming text response)
+          // In voice mode, the spoken version arrives via outputTranscriptionText.
+          // Only add textContent if it's a unique message not already in history.
           if (event.textContent != null && event.textContent!.isNotEmpty) {
             _transcript = event.textContent!;
-            final msg = ChatMessage(
-              content: event.textContent!,
-              role: 'assistant',
-              agent: event.author,
-            );
-            _chatHistory.add(msg);
-            _persistMessage(msg);
+            // Skip adding to chat if outputTranscription will handle it
+            // (voice mode sends the same content via both channels).
+            // Only add if it looks like a tool result or unique content.
+          }
+
+          // Sub-agent tool events (call started / result received)
+          if (event.toolEvent == 'call' && event.toolName != null) {
+            // Deduplicate: Gemini Live sometimes fires the same
+            // function_call event twice in the downstream stream.
+            // Skip if same tool was called within 3 seconds.
+            final now = DateTime.now();
+            if (_lastToolCallName == event.toolName &&
+                _lastToolCallTime != null &&
+                now.difference(_lastToolCallTime!).inSeconds < 3) {
+              debugPrint('[Tool] Skipping duplicate call to ${event.toolName}');
+            } else {
+              _lastToolCallName = event.toolName;
+              _lastToolCallTime = now;
+              // Gate realtime input: Gemini Live API rejects sendRealtimeInput
+              // while processing a tool call, causing 1008 policy violations
+              // or keepalive timeouts. Stop sending audio/video until result.
+              _toolCallActive = true;
+              // Show a status message so user knows Glow is working
+              final prettyName = event.toolName!.replaceAll('_', ' ');
+              final msg = ChatMessage(
+                content: '🔍 Analyzing with $prettyName...',
+                role: 'assistant',
+                agent: event.toolName,
+              );
+              _chatHistory.add(msg);
+            }
+          }
+          if (event.toolEvent == 'result' &&
+              event.toolResult != null &&
+              event.toolResult!.isNotEmpty) {
+            // Don't show raw sub-agent results as chat messages.
+            // The root agent summarizes the key findings via voice,
+            // and the raw text often contains internal instructions
+            // (e.g. 'Root orchestrator, please describe...') that
+            // should never be shown to the user.
+            debugPrint('[Tool] Result received from ${event.toolName} '
+                '(${event.toolResult!.length} chars) — not displaying');
+            _toolCallActive = false; // Ungate realtime input
           }
 
           // Audio is now received on the binary audioBytes stream,
@@ -172,13 +236,18 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
             _aiSpeaking = event.outputTranscriptionFinished != true;
 
             if (event.outputTranscriptionFinished == true) {
-              final msg = ChatMessage(
-                content: _partialAiTranscript.trim(),
-                role: 'assistant',
-                agent: event.author,
-              );
-              _chatHistory.add(msg);
-              _persistMessage(msg);
+              final trimmed = _partialAiTranscript.trim();
+              // Deduplicate: skip if last message has same content
+              if (trimmed.isNotEmpty && (_chatHistory.isEmpty ||
+                  _chatHistory.last.content != trimmed)) {
+                final msg = ChatMessage(
+                  content: trimmed,
+                  role: 'assistant',
+                  agent: event.author,
+                );
+                _chatHistory.add(msg);
+                _persistMessage(msg);
+              }
               _partialAiTranscript = '';
             }
           }
@@ -191,27 +260,41 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
              _userTranscript = _partialUserTranscript;
 
             if (event.inputTranscriptionFinished == true) {
-              final msg = ChatMessage(
-                content: _partialUserTranscript.trim(),
-                role: 'user',
-              );
-              _chatHistory.add(msg);
-              _persistMessage(msg);
+              final trimmed = _partialUserTranscript.trim();
+              // Skip very short transcriptions (≤2 chars) — these are
+              // typically noise artifacts from VAD, not real user speech.
+              if (trimmed.length > 2) {
+                final msg = ChatMessage(
+                  content: trimmed,
+                  role: 'user',
+                );
+                _chatHistory.add(msg);
+                _persistMessage(msg);
+              } else {
+                debugPrint('[Transcript] Skipping noise transcript: "$trimmed"');
+              }
               _partialUserTranscript = '';
               _userTranscript = '';
             }
           }
 
-          // Turn complete → AI stopped speaking, stop playback stream
+          // Turn complete → Gemini finished generating audio for this turn.
+          // DON'T stop playback! Audio chunks may still be queued/playing.
+          // Just mark flags; playback drains naturally via _playNextInQueue.
           if (event.turnComplete == true) {
             _aiSpeaking = false;
-            _stopPlaybackStream();
+            _toolCallActive = false; // Safety: always clear on turn complete
+            // Note: _isPlayingChunk, _audioPlaybackQueue, and _playbackCooldown
+            // will be handled by the playback chain finishing on its own.
           }
 
-          // Interrupted → AI was cut off, stop playback stream
+          // Interrupted → server-side VAD thinks user spoke during AI audio.
+          // IGNORE: don't clear queue or stop playback. Let the AI finish
+          // its full response. Our client-side gating already prevents
+          // mic audio during playback, so these are false positives from
+          // background noise or speaker echo.
           if (event.interrupted == true) {
-            _aiSpeaking = false;
-            _stopPlaybackStream();
+            debugPrint('[Audio] Ignoring interrupted event — letting AI finish');
           }
         });
       });
@@ -237,43 +320,126 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
 
   /// Start listening for binary PCM audio frames from the server.
   void _startAudioPlaybackStream() {
+    // Accumulate PCM chunks as they arrive.
     _audioByteSub = _wsService!.audioBytes.listen((pcmBytes) {
-      if (!_playerOpen) return;
-      // Start the player stream if not already playing.
-      if (!_soundPlayer.isPlaying) {
-        _soundPlayer.startPlayerFromStream(
-          codec: Codec.pcm16,
-          interleaved: false,
-          numChannels: 1,
-          sampleRate: 24000,
-          bufferSize: 8192,
-        ).then((_) {
-          debugPrint('[Audio] Player stream started');
-          // Feed the first chunk after starting.
-          _soundPlayer.feedFromStream(pcmBytes);
-        }).catchError((e) {
-          debugPrint('[Audio] startPlayerFromStream error: $e');
-        });
-      } else {
-        // Stream already open — feed PCM data directly.
-        _soundPlayer.feedFromStream(pcmBytes);
-      }
+      _pcmAccumulator.addAll(pcmBytes);
+
       if (mounted && !_aiSpeaking) {
         setState(() => _aiSpeaking = true);
+      }
+
+      // Once we have enough audio (~500ms), queue it and start playback.
+      // Larger chunks = fewer temp files, less I/O, smoother audio.
+      if (_pcmAccumulator.length >= 24000) {
+        final pcmData = Uint8List.fromList(_pcmAccumulator);
+        _pcmAccumulator.clear();
+        final wavData = _buildWav(pcmData, sampleRate: 24000, channels: 1, bitsPerSample: 16);
+        _audioPlaybackQueue.add(wavData);
+        // Start playing if not already playing.
+        if (!_isPlayingChunk) {
+          _playNextInQueue();
+        }
       }
     });
   }
 
+  /// Play the next WAV buffer from the queue, sequentially.
+  Future<void> _playNextInQueue() async {
+    if (_audioPlaybackQueue.isEmpty || !_playerOpen) {
+      _isPlayingChunk = false;
+      // Start a cooldown: the speaker may still be physically emitting
+      // the tail end of audio. Wait 800ms before allowing mic audio
+      // to be sent again, so VAD doesn't pick up echo.
+      _cooldownTimer?.cancel();
+      _playbackCooldown = true;
+      _cooldownTimer = Timer(const Duration(milliseconds: 800), () {
+        _playbackCooldown = false;
+      });
+      return;
+    }
+
+    _isPlayingChunk = true;
+    final wavData = _audioPlaybackQueue.removeAt(0);
+
+    try {
+      final tempDir = await Directory.systemTemp.createTemp('audio_');
+      final tempFile = File('${tempDir.path}/chunk.wav');
+      await tempFile.writeAsBytes(wavData);
+
+      await _soundPlayer.startPlayer(
+        fromURI: tempFile.path,
+        codec: Codec.pcm16WAV,
+        whenFinished: () {
+          tempFile.delete().catchError((_) => tempFile);
+          tempDir.delete().catchError((_) => tempDir);
+          // Play next in queue, or mark as done.
+          _playNextInQueue();
+        },
+      );
+    } catch (e) {
+      debugPrint('[Audio] Playback error: $e');
+      _isPlayingChunk = false;
+      // Try next chunk even if this one failed.
+      if (_audioPlaybackQueue.isNotEmpty) {
+        _playNextInQueue();
+      }
+    }
+  }
+
+  /// Build a WAV file from raw PCM data.
+  Uint8List _buildWav(Uint8List pcmData, {required int sampleRate, required int channels, required int bitsPerSample}) {
+    final byteRate = sampleRate * channels * (bitsPerSample ~/ 8);
+    final blockAlign = channels * (bitsPerSample ~/ 8);
+    final dataSize = pcmData.length;
+    final fileSize = 36 + dataSize;
+
+    final buffer = ByteData(44 + dataSize);
+    // RIFF header
+    buffer.setUint8(0, 0x52); // R
+    buffer.setUint8(1, 0x49); // I
+    buffer.setUint8(2, 0x46); // F
+    buffer.setUint8(3, 0x46); // F
+    buffer.setUint32(4, fileSize, Endian.little);
+    buffer.setUint8(8, 0x57);  // W
+    buffer.setUint8(9, 0x41);  // A
+    buffer.setUint8(10, 0x56); // V
+    buffer.setUint8(11, 0x45); // E
+    // fmt sub-chunk
+    buffer.setUint8(12, 0x66); // f
+    buffer.setUint8(13, 0x6D); // m
+    buffer.setUint8(14, 0x74); // t
+    buffer.setUint8(15, 0x20); // (space)
+    buffer.setUint32(16, 16, Endian.little); // Sub-chunk size
+    buffer.setUint16(20, 1, Endian.little); // PCM format
+    buffer.setUint16(22, channels, Endian.little);
+    buffer.setUint32(24, sampleRate, Endian.little);
+    buffer.setUint32(28, byteRate, Endian.little);
+    buffer.setUint16(32, blockAlign, Endian.little);
+    buffer.setUint16(34, bitsPerSample, Endian.little);
+    // data sub-chunk
+    buffer.setUint8(36, 0x64); // d
+    buffer.setUint8(37, 0x61); // a
+    buffer.setUint8(38, 0x74); // t
+    buffer.setUint8(39, 0x61); // a
+    buffer.setUint32(40, dataSize, Endian.little);
+    // PCM data
+    final bytes = buffer.buffer.asUint8List();
+    bytes.setRange(44, 44 + dataSize, pcmData);
+    return bytes;
+  }
+
   /// Stop the streaming playback.
   Future<void> _stopPlaybackStream() async {
+    // Clear the queue and accumulator.
+    _audioPlaybackQueue.clear();
+    _pcmAccumulator.clear();
+    _isPlayingChunk = false;
+    _cooldownTimer?.cancel();
+    _playbackCooldown = false;
     try {
-      if (_soundPlayer.isPlaying) {
-        await _soundPlayer.stopPlayer();
-        debugPrint('[Audio] Player stream stopped');
-      }
-    } catch (e) {
-      debugPrint('[Audio] stopPlayer error: $e');
-    }
+      if (_soundPlayer.isPlaying) await _soundPlayer.stopPlayer();
+    } catch (_) {}
+    debugPrint('[Audio] Turn ended');
   }
 
   String get _formattedCallTime {
@@ -286,8 +452,19 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
     if (_isMuted) return;
     final audioStream = _audioService.startRecording();
     _audioSub = audioStream.listen((base64Chunk) {
+      // Full audio gate — suppress mic in all these scenarios:
+      // 1. AI is speaking (transcription still arriving)
+      // 2. Audio chunk is currently playing through speaker
+      // 3. More chunks are queued to play
+      // 4. Cooldown period after last chunk finished (speaker echo)
+      // 5. Tool call is active (prevents Gemini 1008)
+      if (_aiSpeaking ||
+          _isPlayingChunk ||
+          _audioPlaybackQueue.isNotEmpty ||
+          _playbackCooldown ||
+          _toolCallActive) return;
+
       // Decode base64 → raw PCM bytes, then send as binary WS frame.
-      // The `record` package returns base64-encoded PCM data.
       final bytes = base64Decode(base64Chunk);
       _wsService?.sendAudioBytes(Uint8List.fromList(bytes));
     });
@@ -304,6 +481,13 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
     // Per ADK docs: 1 FPS recommended for image/video frames.
     final frameStream = _cameraService.startFrameStream(fps: 1);
     _frameSub = frameStream.listen((base64Frame) {
+      // Gate camera frames during AI speech and tool calls.
+      // Sending visual input during speech can trigger Gemini VAD barge-in.
+      if (_toolCallActive ||
+          _aiSpeaking ||
+          _isPlayingChunk ||
+          _audioPlaybackQueue.isNotEmpty ||
+          _playbackCooldown) return;
       _wsService?.sendImage(base64Frame);
     });
   }
@@ -356,21 +540,25 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
   void _endCall() {
     _stopAudioStreaming();
     _stopCameraStreaming();
+    _callTimer?.cancel();
     _wsService?.sendEnd();
     _wsService?.disconnect();
 
-    // Navigate to chat screen with the consultation transcript
-    if (_chatHistory.isNotEmpty) {
-      Navigator.pushReplacementNamed(
-        context,
-        '/chat',
-        arguments: {
-          'sessionId': _sessionId,
-          'initialMessages': _chatHistory,
-        },
-      );
-    } else {
-      Navigator.pop(context);
+    // Reset to idle start state (no auto-reconnect)
+    if (mounted) {
+      setState(() {
+        _isConnected = false;
+        _isConnecting = false;
+        _hasStarted = false;
+        _callSeconds = 0;
+        _callStatus = 'Tap Start to begin';
+        _transcript = '';
+        _userTranscript = '';
+        _aiSpeaking = false;
+        _showTranscript = false;
+        _initialized = false;
+        _sessionId = const Uuid().v4(); // New session on next start
+      });
     }
   }
 
@@ -382,7 +570,11 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
     _audioService.dispose();
     _cameraService.dispose();
     _audioByteSub?.cancel();
-    _stopPlaybackStream();
+    _playbackTimer?.cancel();
+    _pcmAccumulator.clear();
+    try {
+      if (_soundPlayer.isPlaying) _soundPlayer.stopPlayer();
+    } catch (_) {}
     if (_playerOpen) {
       _soundPlayer.closePlayer();
       _playerOpen = false;
@@ -397,9 +589,9 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
 
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: Stack(
+    return Container(
+      color: Colors.black,
+      child: Stack(
         children: [
           // Camera preview (full screen).
           if (_cameraService.isReady && _isCameraOn)
@@ -477,101 +669,87 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
                         backgroundColor: Colors.black.withValues(alpha: 0.4),
                       ),
                     ),
+                  const SizedBox(width: 4),
+                  IconButton(
+                    onPressed: () {
+                      MainScreen.scaffoldKey.currentState?.openEndDrawer();
+                    },
+                    icon: const Icon(Icons.menu_rounded,
+                        color: Colors.white),
+                    style: IconButton.styleFrom(
+                      backgroundColor: Colors.black.withValues(alpha: 0.4),
+                    ),
+                  ),
                 ],
               ),
             ),
           ),
 
-          // Modality status chips — shows See/Hear/Speak states.
+          // Single turn indicator — replaces Seeing/Hearing/Speaking chips
           if (_isConnected)
             Positioned(
               top: MediaQuery.of(context).padding.top + 50,
               left: 0, right: 0,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _ModalityChip(
-                    icon: Icons.visibility_rounded,
-                    label: 'Seeing',
-                    active: _isCameraOn,
-                  ),
-                  const SizedBox(width: 8),
-                  _ModalityChip(
-                    icon: Icons.hearing_rounded,
-                    label: 'Hearing',
-                    active: !_isMuted,
-                  ),
-                  const SizedBox(width: 8),
-                  _ModalityChip(
-                    icon: Icons.record_voice_over_rounded,
-                    label: 'Speaking',
-                    active: _aiSpeaking,
-                  ),
-                ],
+              child: Center(
+                child: AnimatedBuilder(
+                  animation: _pulseController,
+                  builder: (context, child) {
+                    // Determine current state
+                    final isSpeaking = _aiSpeaking || _isPlayingChunk || _audioPlaybackQueue.isNotEmpty;
+                    final isAnalyzing = _toolCallActive;
+
+                    final Color bgColor;
+                    final String label;
+                    final IconData icon;
+
+                    if (isAnalyzing) {
+                      bgColor = const Color(0xFFFF9800).withValues(alpha: 0.85);
+                      label = '🔍  Analyzing...';
+                      icon = Icons.hourglass_top_rounded;
+                    } else if (isSpeaking) {
+                      final glowOpacity = 0.3 + (_pulseController.value * 0.3);
+                      bgColor = const Color(0xFF6C63FF).withValues(alpha: 0.85);
+                      label = '✨  Glow is speaking';
+                      icon = Icons.graphic_eq_rounded;
+                    } else {
+                      bgColor = Colors.white.withValues(alpha: 0.15);
+                      label = '🎤  Your turn';
+                      icon = Icons.mic_rounded;
+                    }
+
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: bgColor,
+                        borderRadius: BorderRadius.circular(24),
+                        boxShadow: isSpeaking ? [
+                          BoxShadow(
+                            color: const Color(0xFF6C63FF).withValues(
+                                alpha: 0.3 + (_pulseController.value * 0.3)),
+                            blurRadius: 20, spreadRadius: 2,
+                          ),
+                        ] : null,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(icon, color: Colors.white, size: 16),
+                          const SizedBox(width: 8),
+                          Text(label,
+                            style: GoogleFonts.inter(
+                                color: Colors.white, fontSize: 13,
+                                fontWeight: FontWeight.w500),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
               ),
             ),
 
-          // AI presence indicator + agent name.
-          Positioned(
-            top: size.height * 0.30,
-            left: 0, right: 0,
-            child: Center(
-              child: Column(
-                children: [
-                  AnimatedBuilder(
-                    animation: _pulseController,
-                    builder: (context, child) {
-                      final scale = _aiSpeaking
-                          ? 1.0 + (_pulseController.value * 0.15)
-                          : 1.0;
-                      return Transform.scale(
-                        scale: scale,
-                        child: Container(
-                          width: 100, height: 100,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: LinearGradient(
-                              colors: _aiSpeaking
-                                  ? [const Color(0xFF6C63FF), const Color(0xFF00BFA5)]
-                                  : [Colors.white.withValues(alpha: 0.15),
-                                     Colors.white.withValues(alpha: 0.05)],
-                            ),
-                            boxShadow: _aiSpeaking ? [
-                              BoxShadow(
-                                color: const Color(0xFF6C63FF).withValues(alpha: 0.4),
-                                blurRadius: 30, spreadRadius: 5,
-                              ),
-                            ] : null,
-                          ),
-                          child: Icon(
-                            _aiSpeaking ? Icons.graphic_eq_rounded
-                                : Icons.face_retouching_natural,
-                            color: Colors.white, size: 44,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  Text('Glow',
-                      style: GoogleFonts.inter(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 4),
-                  Text(
-                    _aiSpeaking ? 'Speaking...' : 'Listening to you',
-                    style: GoogleFonts.inter(
-                        color: Colors.white.withValues(alpha: 0.6),
-                        fontSize: 12),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // Live transcript (AI response).
-          if (_transcript.isNotEmpty)
+          // Live transcript (AI response) — hidden when panel is open.
+          if (_transcript.isNotEmpty && !_showTranscript)
             Positioned(
               bottom: 160, left: 24, right: 24,
               child: Container(
@@ -591,8 +769,8 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
               ),
             ),
 
-          // User speech transcript (real-time).
-          if (_userTranscript.isNotEmpty)
+          // User speech transcript (real-time) — hidden when panel is open.
+          if (_userTranscript.isNotEmpty && !_showTranscript)
             Positioned(
               bottom: 260, left: 24, right: 24,
               child: Container(
@@ -635,10 +813,12 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
                     onTap: _toggleMute,
                   ),
                   _CallBtn(
-                    icon: _isCameraOn ? Icons.videocam : Icons.videocam_off,
-                    label: _isCameraOn ? 'Camera' : 'Off',
-                    color: !_isCameraOn ? Colors.red : Colors.white.withValues(alpha: 0.2),
-                    onTap: _toggleCamera,
+                    icon: Icons.chat_bubble_outline,
+                    label: 'Chat',
+                    color: _showTranscript
+                        ? const Color(0xFF6C63FF)
+                        : Colors.white.withValues(alpha: 0.2),
+                    onTap: () => setState(() => _showTranscript = !_showTranscript),
                   ),
                   _CallBtn(
                     icon: Icons.call_end_rounded,
@@ -647,10 +827,214 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
                     large: true,
                     onTap: _endCall,
                   ),
+                  _CallBtn(
+                    icon: _isCameraOn ? Icons.videocam : Icons.videocam_off,
+                    label: _isCameraOn ? 'Camera' : 'Off',
+                    color: !_isCameraOn ? Colors.red : Colors.white.withValues(alpha: 0.2),
+                    onTap: _toggleCamera,
+                  ),
                 ],
               ),
             ),
           ),
+
+          // Transcript peek panel.
+          if (_showTranscript)
+            Positioned(
+              bottom: 140, left: 0, right: 0, top: MediaQuery.of(context).padding.top + 60,
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.85),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.1),
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    // Header
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
+                      child: Row(
+                        children: [
+                          Icon(Icons.subtitles_rounded,
+                              color: Colors.white.withValues(alpha: 0.7), size: 18),
+                          const SizedBox(width: 8),
+                          Text('Live Transcript',
+                              style: GoogleFonts.inter(
+                                  color: Colors.white, fontSize: 14,
+                                  fontWeight: FontWeight.w600)),
+                          const Spacer(),
+                          IconButton(
+                            onPressed: () => setState(() => _showTranscript = false),
+                            icon: Icon(Icons.close_rounded,
+                                color: Colors.white.withValues(alpha: 0.5), size: 20),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Divider(color: Colors.white.withValues(alpha: 0.1), height: 1),
+                    // Messages
+                    Expanded(
+                      child: _chatHistory.isEmpty
+                          ? Center(
+                              child: Text('Transcript will appear here...',
+                                  style: GoogleFonts.inter(
+                                      color: Colors.white.withValues(alpha: 0.3),
+                                      fontSize: 13)),
+                            )
+                          : ListView.builder(
+                              padding: const EdgeInsets.all(12),
+                              reverse: true,
+                              itemCount: _chatHistory.length,
+                              itemBuilder: (ctx, i) {
+                                final msg = _chatHistory[_chatHistory.length - 1 - i];
+                                final isUser = msg.role == 'user';
+                                return Padding(
+                                  padding: const EdgeInsets.only(bottom: 8),
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Container(
+                                        width: 24, height: 24,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: isUser
+                                              ? Colors.white.withValues(alpha: 0.15)
+                                              : const Color(0xFF6C63FF).withValues(alpha: 0.3),
+                                        ),
+                                        child: Icon(
+                                          isUser ? Icons.person : Icons.auto_awesome,
+                                          color: Colors.white.withValues(alpha: 0.7),
+                                          size: 14,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              isUser ? 'You' : 'Glow',
+                                              style: GoogleFonts.inter(
+                                                  color: Colors.white.withValues(alpha: 0.5),
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w600),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              msg.content,
+                                              style: GoogleFonts.inter(
+                                                  color: Colors.white.withValues(alpha: 0.85),
+                                                  fontSize: 13, height: 1.4),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          // Full-screen idle overlay (before user starts).
+          if (!_hasStarted)
+            Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFF1a1a2e), Color(0xFF0f3460)],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
+              ),
+              child: SafeArea(
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Animated glow icon
+                      AnimatedBuilder(
+                        animation: _pulseController,
+                        builder: (context, child) {
+                          final scale = 1.0 + (_pulseController.value * 0.08);
+                          return Transform.scale(
+                            scale: scale,
+                            child: Container(
+                              width: 100, height: 100,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                gradient: const LinearGradient(
+                                  colors: [Color(0xFF6C63FF), Color(0xFF00BFA5)],
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFF6C63FF).withValues(alpha: 0.3),
+                                    blurRadius: 30,
+                                    spreadRadius: 5,
+                                  ),
+                                ],
+                              ),
+                              child: const Icon(Icons.auto_awesome,
+                                  color: Colors.white, size: 44),
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 24),
+                      Text('Glow',
+                          style: GoogleFonts.inter(
+                              color: Colors.white,
+                              fontSize: 28,
+                              fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      Text('Your AI Skincare Advisor',
+                          style: GoogleFonts.inter(
+                              color: Colors.white.withValues(alpha: 0.6),
+                              fontSize: 14)),
+                      const SizedBox(height: 48),
+                      // Start button
+                      GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _hasStarted = true;
+                            _isConnecting = true;
+                            _callStatus = 'Connecting...';
+                          });
+                          _initializeAll();
+                        },
+                        child: Container(
+                          width: 80, height: 80,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: const Color(0xFF00BFA5),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF00BFA5).withValues(alpha: 0.4),
+                                blurRadius: 20, spreadRadius: 4,
+                              ),
+                            ],
+                          ),
+                          child: const Icon(Icons.videocam_rounded,
+                              color: Colors.white, size: 36),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text('Start Consultation',
+                          style: GoogleFonts.inter(
+                              color: Colors.white.withValues(alpha: 0.7),
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
           // Full-screen connection overlay.
           if (_isConnecting)
             Container(
@@ -681,7 +1065,12 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
                             fontSize: 13)),
                     const SizedBox(height: 40),
                     TextButton(
-                      onPressed: () => Navigator.pop(context),
+                      onPressed: () {
+                        setState(() {
+                          _isConnecting = false;
+                          _callStatus = 'Disconnected';
+                        });
+                      },
                       child: Text('Cancel',
                           style: GoogleFonts.inter(
                               color: Colors.white.withValues(alpha: 0.6),
@@ -735,8 +1124,8 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
                       ),
                       const SizedBox(height: 12),
                       TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: Text('Go Back',
+                        onPressed: () => openAppSettings(),
+                        child: Text('Try Again',
                             style: GoogleFonts.inter(
                                 color: Colors.white.withValues(alpha: 0.5))),
                       ),
@@ -747,7 +1136,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
             ),
 
           // Connection failed overlay.
-          if (!_isConnecting && !_isConnected && !_permissionDenied)
+          if (_hasStarted && !_isConnecting && !_isConnected && !_permissionDenied)
             Container(
               color: Colors.black.withValues(alpha: 0.85),
               child: Center(
@@ -790,8 +1179,10 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
                     ),
                     const SizedBox(height: 12),
                     TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: Text('Go Back',
+                      onPressed: () {
+                        setState(() => _callStatus = 'Disconnected');
+                      },
+                      child: Text('Dismiss',
                           style: GoogleFonts.inter(
                               color: Colors.white.withValues(alpha: 0.5))),
                     ),

@@ -34,7 +34,7 @@ android {
 
     defaultConfig {
         applicationId = "com.skincare.advisor"
-        minSdk = 23 // Required for Firebase Auth
+        minSdk = flutter.minSdkVersion // Required for Firebase Auth
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

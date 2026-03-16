@@ -1,4 +1,5 @@
-google-adk[eval]
+google-adk[eval]==1.23.0
+google-genai==1.60.0
 google-cloud-aiplatform[agent_engine]
 fastapi
 uvicorn[standard]

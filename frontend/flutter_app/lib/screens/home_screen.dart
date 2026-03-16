@@ -606,7 +606,7 @@ class _ProfileTab extends ConsumerWidget {
           trailing: const Icon(Icons.chevron_right),
           onTap: () => showAboutDialog(
             context: context,
-            applicationName: 'AI Skincare Advisor',
+            applicationName: 'Glow',
             applicationVersion: '1.0.0',
             applicationIcon: Container(
               width: 48, height: 48,
@@ -616,13 +616,13 @@ class _ProfileTab extends ConsumerWidget {
                   colors: [Color(0xFF6C63FF), Color(0xFF00BFA5)],
                 ),
               ),
-              child: const Icon(Icons.face_retouching_natural,
+              child: const Icon(Icons.auto_awesome,
                   color: Colors.white, size: 28),
             ),
             children: [
               const SizedBox(height: 8),
               Text(
-                'Your personal AI-powered skincare advisor. '
+                'Glow is your personal AI-powered skincare advisor. '
                 'Get real-time skin analysis, personalized routines, '
                 'and product recommendations — all powered by Google Gemini.',
                 style: GoogleFonts.inter(fontSize: 13, height: 1.5),

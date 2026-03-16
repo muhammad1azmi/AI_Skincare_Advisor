@@ -254,7 +254,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   colors: [Color(0xFF6C63FF), Color(0xFF00BFA5)],
                 ),
               ),
-              child: const Icon(Icons.face_retouching_natural,
+              child: const Icon(Icons.auto_awesome,
                   color: Colors.white, size: 18),
             ),
             const SizedBox(width: 10),
@@ -263,7 +263,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               children: [
                 Text('Glow', style: GoogleFonts.inter(
                     fontSize: 16, fontWeight: FontWeight.w600)),
-                Text('AI Skincare Advisor',
+                Text('Your AI Skincare Advisor',
                     style: GoogleFonts.inter(
                         fontSize: 11,
                         color: theme.colorScheme.onSurfaceVariant)),
@@ -340,7 +340,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.face_retouching_natural, size: 64,
+          Icon(Icons.auto_awesome, size: 64,
               color: theme.colorScheme.primary.withValues(alpha: 0.3)),
           const SizedBox(height: 16),
           Text('Chat with Glow',

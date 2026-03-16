@@ -25,6 +25,14 @@ class AdkEvent {
   final String? outputTranscriptionText;
   final bool? outputTranscriptionFinished;
 
+  // Tool events (sub-agent calls and results)
+  final String? toolEvent; // 'call' or 'result'
+  final String? toolName;
+  final String? toolResult;
+
+  // Server status messages (e.g. "Connecting to Glow...", "Session ready")
+  final String? statusMessage;
+
   AdkEvent({
     this.textContent,
     this.audioBase64,
@@ -36,6 +44,10 @@ class AdkEvent {
     this.inputTranscriptionFinished,
     this.outputTranscriptionText,
     this.outputTranscriptionFinished,
+    this.toolEvent,
+    this.toolName,
+    this.toolResult,
+    this.statusMessage,
   });
 
   /// Parse a raw ADK event JSON from the server.
@@ -71,6 +83,10 @@ class AdkEvent {
     final inputTx = json['inputTranscription'] ?? json['input_transcription'];
     final outputTx = json['outputTranscription'] ?? json['output_transcription'];
 
+    // Check for server status messages (type: "status")
+    final statusType = json['type'] as String?;
+    final statusMsg = (statusType == 'status') ? json['message'] as String? : null;
+
     return AdkEvent(
       textContent: textContent,
       audioBase64: audioBase64,
@@ -82,6 +98,10 @@ class AdkEvent {
       inputTranscriptionFinished: inputTx != null ? (inputTx['finished'] as bool?) : null,
       outputTranscriptionText: outputTx != null ? (outputTx['text'] as String?) : null,
       outputTranscriptionFinished: outputTx != null ? (outputTx['finished'] as bool?) : null,
+      toolEvent: json['toolEvent'] as String?,
+      toolName: json['toolName'] as String?,
+      toolResult: json['toolResult'] as String?,
+      statusMessage: statusMsg,
     );
   }
 }
@@ -155,12 +175,28 @@ class WebSocketService {
               final json = jsonDecode(message) as Map<String, dynamic>;
               final event = AdkEvent.fromJson(json);
               _eventController?.add(event);
+
+              // Fallback: if server sends audio as base64 in JSON (inline_data),
+              // decode it and push to the audio stream.
+              if (event.audioBase64 != null && event.audioBase64!.isNotEmpty) {
+                debugPrint('[WS] Audio received as base64 in JSON (${event.audioMimeType}), decoding...');
+                try {
+                  final audioBytes = base64Decode(event.audioBase64!);
+                  _audioController?.add(Uint8List.fromList(audioBytes));
+                  debugPrint('[WS] Decoded ${audioBytes.length} audio bytes from base64');
+                } catch (e) {
+                  debugPrint('[WS] Failed to decode audio base64: $e');
+                }
+              }
             } catch (e) {
               debugPrint('[WS] Failed to parse event: $e');
             }
           } else if (message is List<int>) {
             // Binary frame = raw PCM audio bytes from Gemini output
+            debugPrint('[WS] Binary frame received: ${message.length} bytes');
             _audioController?.add(Uint8List.fromList(message));
+          } else {
+            debugPrint('[WS] Unknown message type: ${message.runtimeType}');
           }
         },
         onError: (error) {

@@ -250,13 +250,7 @@ async def send_push_notification(data: dict):
 
 @web_app.get("/api/sessions/{user_id}")
 async def list_user_sessions(user_id: str, token: str = ""):
-    """List all past sessions for a user.
-
-    Query params:
-        token: Firebase ID token for authentication.
-
-    Returns list of session metadata.
-    """
+    """List all past sessions for a user."""
     # Skip auth in local dev
     if os.environ.get("SKIP_AUTH", "").lower() != "true":
         if not token:
@@ -265,7 +259,6 @@ async def list_user_sessions(user_id: str, token: str = ""):
         firebase_user = verify_firebase_token(token)
         if firebase_user is None:
             return {"error": "Invalid or expired token"}, 401
-        # Prevent impersonation — enforce matching UID
         if firebase_user["uid"] != user_id:
             return {"error": "Forbidden"}, 403
 
@@ -277,7 +270,6 @@ async def list_user_sessions(user_id: str, token: str = ""):
 
         session_list = []
         for s in (sessions or []):
-            # Extract last message preview from session events
             last_message = ""
             message_count = 0
             if hasattr(s, "events") and s.events:
@@ -308,15 +300,7 @@ async def list_user_sessions(user_id: str, token: str = ""):
 
 @web_app.post("/api/trigger-reminders")
 async def trigger_reminders(data: dict = {}):
-    """Trigger routine reminders and personalized product deals for all users.
-
-    Designed to be called by Cloud Scheduler (or manually in dev).
-
-    Body (optional):
-        routine_type: "morning" | "evening"
-        include_deals: true  — include personalized product discount notifications
-        concerns: ["acne", "oily"]  — override skin concerns (otherwise read from session)
-    """
+    """Trigger routine reminders and personalized product deals for all users."""
     from server.notifications import (
         send_routine_reminder,
         send_product_discount,
@@ -324,20 +308,17 @@ async def trigger_reminders(data: dict = {}):
 
     routine_type = data.get("routine_type", "morning")
     include_deals = data.get("include_deals", True)
-    override_concerns = data.get("concerns")  # optional manual override
+    override_concerns = data.get("concerns")
     results = {"sent": 0, "failed": 0, "deals_sent": 0}
 
     for idx, (uid, token) in enumerate(fcm_tokens.items()):
-        # Send routine reminder
         ok = await send_routine_reminder(token=token, routine_type=routine_type)
         if ok:
             results["sent"] += 1
         else:
             results["failed"] += 1
 
-        # Send personalized product discount
         if include_deals:
-            # Try to read user's skin concerns from their latest session
             user_concerns = override_concerns
             if not user_concerns:
                 try:
@@ -347,7 +328,6 @@ async def trigger_reminders(data: dict = {}):
                     if sessions:
                         latest = sessions[-1]
                         state = getattr(latest, "state", {}) or {}
-                        # The agent stores skin analysis results in session state
                         analysis = state.get("latest_analysis", {})
                         if isinstance(analysis, dict):
                             user_concerns = analysis.get("concerns", [])
@@ -368,240 +348,199 @@ async def trigger_reminders(data: dict = {}):
     return results
 
 
+@web_app.websocket("/ws-test")
+async def websocket_test(websocket: WebSocket):
+    """Minimal WebSocket echo endpoint for infra testing."""
+    await websocket.accept()
+    logger.info("ws-test: connection accepted")
+    try:
+        while True:
+            data = await websocket.receive_text()
+            logger.info(f"ws-test: got '{data}'")
+            await websocket.send_text(f"echo: {data}")
+    except WebSocketDisconnect:
+        logger.info("ws-test: client disconnected")
+    except Exception as e:
+        logger.error(f"ws-test: error {e}")
+
+
 @web_app.websocket("/ws/{user_id}/{session_id}")
 async def websocket_streaming(websocket: WebSocket, user_id: str, session_id: str):
-    """WebSocket endpoint for Gemini Live API bidi-streaming.
-
-    Handles real-time voice/video/text skincare consultations.
-    Requires a valid Firebase Auth token (query param or header).
-
-    Protocol (client → server):
-    - Binary frames: Raw PCM audio bytes (16kHz, 16-bit, mono)
-    - Text frames (JSON): {"type": "text", "text": "..."} for text messages
-    - Text frames (JSON): {"type": "image", "data": "<base64>", "mimeType": "image/jpeg"}
-    - Text frames (JSON): {"type": "end"} to close session
-
-    Protocol (server → client):
-    - Text frames: Full ADK event JSON via event.model_dump_json()
-      - event.content.parts[].text → text responses
-      - event.content.parts[].inline_data → audio responses (base64 PCM 24kHz)
-      - event.input_transcription → user speech transcript
-      - event.output_transcription → model speech transcript
-    """
+    """WebSocket endpoint for Gemini Live API bidi-streaming."""
     # --- Phase 2: Firebase Auth ---
+    logger.info(f"Session {session_id}: WS handler entered, checking auth...")
     firebase_user = await verify_websocket_token(websocket)
     if firebase_user is None:
-        return  # Connection rejected (4001 sent by auth module)
+        logger.warning(f"Session {session_id}: Auth failed, rejecting")
+        return
 
-    # Use Firebase UID as the user_id for session security
-    # (ignore URL param — prevents impersonation)
     authenticated_user_id = firebase_user["uid"]
-
+    logger.info(f"Session {session_id}: Auth OK for {authenticated_user_id}, accepting WebSocket...")
     await websocket.accept()
-    logger.info(f"Session {session_id}: WebSocket connected for user {authenticated_user_id} ({firebase_user.get('email', '')})")
+    logger.info(f"Session {session_id}: WebSocket accepted for user {authenticated_user_id}")
 
-    # --- Phase 3: Session Initialization ---
-    session = await session_service.get_session(
-        app_name="skincare_advisor",
-        user_id=authenticated_user_id,
-        session_id=session_id,
-    )
-    if session is None:
-        session = await session_service.create_session(
-            app_name="skincare_advisor",
-            user_id=authenticated_user_id,
-            session_id=session_id,
-        )
-        logger.info(f"Session {session_id}: Created new session")
-    else:
-        logger.info(f"Session {session_id}: Resumed existing session")
+    # Send immediate status to client
+    try:
+        await websocket.send_text(json.dumps({"type": "status", "message": "Connected. Initializing session..."}))
+    except Exception:
+        pass
 
-    # Create LiveRequestQueue for this session (in async context per ADK best practice)
-    live_request_queue = LiveRequestQueue()
-    active_queues[session_id] = live_request_queue
-
-    # Configure for bidi-streaming with audio + text responses
-    # Per ADK docs: use StreamingMode.BIDI for bidirectional streaming
-    run_config = RunConfig(
-        response_modalities=["AUDIO"],
-        streaming_mode=StreamingMode.BIDI,
-        speech_config=types.SpeechConfig(
-            voice_config=types.VoiceConfig(
-                prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                    voice_name="Aoede",  # Friendly, warm voice
-                )
-            )
-        ),
-        input_audio_transcription=types.AudioTranscriptionConfig(),
-        output_audio_transcription=types.AudioTranscriptionConfig(),
-        max_llm_calls=500,
-    )
-
-    logger.info(f"Session {session_id}: User: {firebase_user.get('name', authenticated_user_id)}, Model: {root_agent.model}")
-
-    # --- Phase 4: Bidi-Streaming ---
-    async def upstream_task():
-        """Receive messages from WebSocket and queue them for the agent.
-
-        Per ADK docs (Part 2):
-        - Text: use send_content(Content) for turn-by-turn messages
-        - Audio: use send_realtime(Blob) for continuous PCM streaming
-        - Images: use send_realtime(Blob) for JPEG frames
-        - End: use close() for graceful termination
-        """
+    # Top-level try/except to catch ANY crash after accept
+    try:
+        # --- Phase 3: Session Initialization ---
+        # VertexAI Session Service does NOT support user-provided session IDs.
+        # Always create a new session and let VertexAI auto-generate the ID.
+        logger.info(f"Session {session_id}: Creating VertexAI session...")
         try:
-            while True:
-                # Use receive() to handle both binary and text frames
-                message = await websocket.receive()
+            session = await asyncio.wait_for(
+                session_service.create_session(
+                    app_name="skincare_advisor",
+                    user_id=authenticated_user_id,
+                ),
+                timeout=30,
+            )
+            # Use the VertexAI-generated session ID for all subsequent operations
+            actual_session_id = session.id
+            logger.info(f"Session {session_id}: Created VertexAI session {actual_session_id}")
+        except asyncio.TimeoutError:
+            logger.error(f"Session {session_id}: Session service timed out (30s)")
+            await websocket.send_text(json.dumps({"error": "session_timeout", "message": "Session service timed out"}))
+            await websocket.close(code=1011, reason="Session service timeout")
+            return
+        except Exception as e:
+            logger.error(f"Session {session_id}: Session init failed: {traceback.format_exc()}")
+            await websocket.send_text(json.dumps({"error": "session_error", "message": str(e)}))
+            await websocket.close(code=1011, reason=f"Session error: {e}")
+            return
 
-                if "bytes" in message:
-                    # Binary frame = raw PCM audio (16kHz, 16-bit, mono)
-                    # Per ADK docs: send audio via send_realtime(Blob)
-                    audio_data = message["bytes"]
-                    audio_blob = types.Blob(
-                        mime_type="audio/pcm;rate=16000",
-                        data=audio_data,
-                    )
-                    live_request_queue.send_realtime(audio_blob)
+        live_request_queue = LiveRequestQueue()
+        active_queues[session_id] = live_request_queue
 
-                elif "text" in message:
-                    # Text frame = JSON message
-                    text_data = message["text"]
-                    try:
-                        json_message = json.loads(text_data)
-                    except json.JSONDecodeError:
-                        logger.warning(f"Session {session_id}: Malformed JSON from client")
-                        await websocket.send_text(json.dumps({
-                            "error": "invalid_json",
-                            "message": "Message must be valid JSON",
-                        }))
-                        continue
+        run_config = RunConfig(
+            response_modalities=["AUDIO"],
+            streaming_mode=StreamingMode.BIDI,
+            speech_config=types.SpeechConfig(
+                voice_config=types.VoiceConfig(
+                    prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name="Aoede")
+                )
+            ),
+            input_audio_transcription=types.AudioTranscriptionConfig(),
+            output_audio_transcription=types.AudioTranscriptionConfig(),
+            max_llm_calls=500,
+        )
 
-                    msg_type = json_message.get("type")
-                    if not msg_type:
-                        logger.warning(f"Session {session_id}: Missing 'type' field")
-                        await websocket.send_text(json.dumps({
-                            "error": "missing_type",
-                            "message": "Message must include a 'type' field",
-                        }))
-                        continue
+        logger.info(f"Session {session_id}: Session ready, model={root_agent.model}")
+        await websocket.send_text(json.dumps({"type": "status", "message": "Session ready. Start speaking!"}))
 
-                    if msg_type == "text":
-                        # Text message → send_content for turn-by-turn
-                        user_text = json_message.get("text", "").strip()
-                        if not user_text:
-                            continue  # ignore empty messages
-
-                        # ── Rate limiting ──
-                        now = time.monotonic()
-                        if session_id not in _rate_limits:
-                            _rate_limits[session_id] = collections.deque()
-                        q = _rate_limits[session_id]
-                        # Purge old timestamps
-                        while q and now - q[0] > _RATE_LIMIT_WINDOW:
-                            q.popleft()
-                        if len(q) >= _RATE_LIMIT_MAX_MESSAGES:
-                            logger.warning(f"Session {session_id}: Rate limited")
-                            await websocket.send_text(json.dumps({
-                                "error": "rate_limited",
-                                "message": f"Too many messages. Max {_RATE_LIMIT_MAX_MESSAGES} per {_RATE_LIMIT_WINDOW}s.",
-                            }))
+        # --- Phase 4: Bidi-Streaming ---
+        async def upstream_task():
+            try:
+                while True:
+                    message = await websocket.receive()
+                    if "bytes" in message:
+                        audio_blob = types.Blob(mime_type="audio/pcm;rate=16000", data=message["bytes"])
+                        live_request_queue.send_realtime(audio_blob)
+                    elif "text" in message:
+                        try:
+                            json_message = json.loads(message["text"])
+                        except json.JSONDecodeError:
                             continue
-                        q.append(now)
-
-                        content = types.Content(
-                            role="user",
-                            parts=[types.Part(text=user_text)],
-                        )
-                        live_request_queue.send_content(content)
-
-                    elif msg_type == "image":
-                        # Image frame (base64 JPEG) → send_realtime(Blob)
-                        # Per ADK docs: Do NOT use send_content with inline_data
-                        raw_data = json_message.get("data")
-                        if not raw_data:
-                            continue  # ignore empty image frames
-                        image_data = base64.b64decode(raw_data)
-                        image_blob = types.Blob(
-                            mime_type=json_message.get("mimeType", "image/jpeg"),
-                            data=image_data,
-                        )
-                        live_request_queue.send_realtime(image_blob)
-
-                    elif msg_type == "end":
-                        # Client signals end of conversation
+                        msg_type = json_message.get("type")
+                        if msg_type == "text":
+                            user_text = json_message.get("text", "").strip()
+                            if not user_text:
+                                continue
+                            now = time.monotonic()
+                            if session_id not in _rate_limits:
+                                _rate_limits[session_id] = collections.deque()
+                            q = _rate_limits[session_id]
+                            while q and now - q[0] > _RATE_LIMIT_WINDOW:
+                                q.popleft()
+                            if len(q) >= _RATE_LIMIT_MAX_MESSAGES:
+                                await websocket.send_text(json.dumps({"error": "rate_limited"}))
+                                continue
+                            q.append(now)
+                            content = types.Content(role="user", parts=[types.Part(text=user_text)])
+                            live_request_queue.send_content(content)
+                        elif msg_type == "image":
+                            raw_data = json_message.get("data")
+                            if raw_data:
+                                image_blob = types.Blob(
+                                    mime_type=json_message.get("mimeType", "image/jpeg"),
+                                    data=base64.b64decode(raw_data),
+                                )
+                                live_request_queue.send_realtime(image_blob)
+                        elif msg_type == "end":
+                            live_request_queue.close()
+                            break
+                    elif message.get("type") == "websocket.disconnect":
                         live_request_queue.close()
                         break
+            except WebSocketDisconnect:
+                logger.info(f"Session {session_id}: Client disconnected (upstream)")
+            except Exception as e:
+                logger.error(f"Session {session_id}: Upstream error: {traceback.format_exc()}")
 
-                    else:
-                        logger.warning(f"Session {session_id}: Unknown type '{msg_type}'")
-                        await websocket.send_text(json.dumps({
-                            "error": "unknown_type",
-                            "message": f"Unknown message type: {msg_type}",
-                        }))
-
-        except WebSocketDisconnect:
-            logger.info(f"Session {session_id}: Client disconnected (upstream)")
-        except Exception as e:
-            logger.error(f"Session {session_id}: Upstream error: {e}")
-            traceback.print_exc()
-
-    async def downstream_task():
-        """Stream agent responses back to WebSocket.
-
-        Per ADK docs (Part 3):
-        - Forward full ADK events as JSON using event.model_dump_json()
-        - Events may contain: content (text/audio), transcription, turn signals
-        """
-        try:
-            async for event in runner.run_live(
-                user_id=authenticated_user_id,
-                session_id=session_id,
-                live_request_queue=live_request_queue,
-                run_config=run_config,
-            ):
-                # Forward the full ADK event as JSON to the client.
-                # This includes all event fields: content, transcription,
-                # turn_complete, interrupted, etc.
-                # Per ADK bidi-demo pattern: event.model_dump_json()
-                event_json = event.model_dump_json(
-                    exclude_none=True, by_alias=True
-                )
-                await websocket.send_text(event_json)
-
-        except WebSocketDisconnect:
-            logger.info(f"Session {session_id}: Client disconnected (downstream)")
-        except Exception as e:
-            logger.error(f"Session {session_id}: Downstream error: {e}")
-            traceback.print_exc()
-            # Notify client of the error before the connection closes
+        async def downstream_task():
             try:
-                await websocket.send_text(json.dumps({
-                    "error": "server_error",
-                    "message": f"An internal error occurred: {type(e).__name__}: {e}. Please reconnect.",
-                }))
-            except Exception:
-                pass  # Client may already be disconnected
+                async for event in runner.run_live(
+                    user_id=authenticated_user_id,
+                    session_id=actual_session_id,
+                    live_request_queue=live_request_queue,
+                    run_config=run_config,
+                ):
+                    event_json = event.model_dump_json(exclude_none=True, by_alias=True)
+                    # Debug: inspect event structure
+                    try:
+                        parsed = json.loads(event_json)
+                        has_audio = False
+                        has_text = False
+                        has_input_tx = 'inputTranscription' in parsed or 'input_transcription' in parsed
+                        has_output_tx = 'outputTranscription' in parsed or 'output_transcription' in parsed
+                        content = parsed.get('content', {})
+                        parts = content.get('parts', []) if isinstance(content, dict) else []
+                        for part in parts:
+                            if isinstance(part, dict):
+                                if 'inlineData' in part or 'inline_data' in part:
+                                    has_audio = True
+                                    inline = part.get('inlineData') or part.get('inline_data', {})
+                                    mime = inline.get('mimeType') or inline.get('mime_type', 'unknown')
+                                    data_len = len(inline.get('data', ''))
+                                    logger.info(f"Session {session_id}: Event has AUDIO: mime={mime}, data_len={data_len}")
+                                if 'text' in part:
+                                    has_text = True
+                        if not has_audio:
+                            logger.debug(f"Session {session_id}: Event keys={list(parsed.keys())}, has_text={has_text}, input_tx={has_input_tx}, output_tx={has_output_tx}")
+                    except Exception:
+                        pass
+                    await websocket.send_text(event_json)
+            except WebSocketDisconnect:
+                logger.info(f"Session {session_id}: Client disconnected (downstream)")
+            except Exception as e:
+                logger.error(f"Session {session_id}: Downstream error: {traceback.format_exc()}")
+                try:
+                    await websocket.send_text(json.dumps({"error": "server_error", "message": str(e)}))
+                except Exception:
+                    pass
 
-    # Run upstream and downstream concurrently
-    try:
-        await asyncio.gather(upstream_task(), downstream_task())
-    except Exception as e:
-        logger.error(f"Session {session_id}: Session error: {e}", exc_info=True)
         try:
-            await websocket.send_text(json.dumps({
-                "error": "session_error",
-                "message": "Session encountered an error. Please try again.",
-            }))
+            await asyncio.gather(upstream_task(), downstream_task())
+        except Exception as e:
+            logger.error(f"Session {session_id}: gather error: {traceback.format_exc()}")
+        finally:
+            live_request_queue.close()
+            active_queues.pop(session_id, None)
+            _rate_limits.pop(session_id, None)
+            logger.info(f"Session {session_id}: Session cleaned up")
+
+    except Exception as e:
+        # Catch-all: log full traceback for ANY unhandled crash after accept
+        logger.error(f"Session {session_id}: FATAL ERROR: {traceback.format_exc()}")
+        try:
+            await websocket.send_text(json.dumps({"error": "fatal", "message": str(e)}))
+            await websocket.close(code=1011, reason="Internal server error")
         except Exception:
             pass
-    finally:
-        # --- Phase 5: Cleanup ---
-        # Per ADK docs: Always close the queue to prevent zombie sessions
-        live_request_queue.close()
-        active_queues.pop(session_id, None)
-        _rate_limits.pop(session_id, None)
-        logger.info(f"Session {session_id}: Session cleaned up")
 
 
 if __name__ == "__main__":

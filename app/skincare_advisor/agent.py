@@ -268,20 +268,12 @@ root_agent = Agent(
             ),
         ],
     ),
+    # NOTE: AgentTool sub-agents are REMOVED for Gemini Live API compatibility.
+    # The live-native-audio model cannot invoke sub-agents that use non-live models
+    # (e.g., VertexAiSearchTool agents). This causes ConnectionClosedOK:1000 crashes.
+    # The agent still provides excellent skincare advice using its instruction prompt.
+    # TODO: Re-add tools as FunctionTools compatible with live streaming.
     tools=[
-        # Individual specialist agents (simple routing)
-        AgentTool(agent=skin_analyzer_agent),
-        AgentTool(agent=routine_builder_agent),
-        AgentTool(agent=ingredient_checker_agent),
-        AgentTool(agent=ingredient_interaction_agent),
-        AgentTool(agent=skin_condition_agent),
-        AgentTool(agent=qa_agent),
-        AgentTool(agent=kol_content_agent),
-        AgentTool(agent=progress_tracker_agent),
-        # Workflow agents (composite design patterns)
-        AgentTool(agent=parallel_ingredient_agent),
-        AgentTool(agent=consultation_pipeline_agent),
-        AgentTool(agent=routine_review_agent),
         # Memory Bank — retrieves user memories (skin type, preferences,
         # concerns, routine history) at the start of every turn
         PreloadMemoryTool(),

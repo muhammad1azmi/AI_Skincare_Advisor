@@ -61,8 +61,8 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
   String _partialAiTranscript = '';
   String _partialUserTranscript = '';
 
-  // Audio playback buffer for PCM chunks
-  final List<int> _audioBuffer = [];
+  // Audio playback queue for PCM chunks
+  final List<Uint8List> _audioQueue = [];
   bool _isPlayingAudio = false;
 
   // Streaming subscriptions
@@ -226,48 +226,60 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
   Future<void> _playAudioChunk(String base64Audio) async {
     try {
       final bytes = base64Decode(base64Audio);
-      _audioBuffer.addAll(bytes);
+      _audioQueue.add(Uint8List.fromList(bytes));
+      debugPrint('[Audio] Queued chunk: ${bytes.length} bytes, queue size: ${_audioQueue.length}');
 
-      // Only start playback if not already playing — accumulate chunks.
-      if (!_isPlayingAudio && _audioBuffer.length > 4800) {
+      // Start the playback loop if not already running.
+      if (!_isPlayingAudio) {
         _isPlayingAudio = true;
-        await _flushAudioBuffer();
+        _processAudioQueue();
       }
     } catch (e) {
-      debugPrint('[Audio Playback] Error: $e');
+      debugPrint('[Audio Playback] Error queuing: $e');
     }
   }
 
-  /// Flush accumulated audio buffer to the player.
-  Future<void> _flushAudioBuffer() async {
-    if (_audioBuffer.isEmpty) {
-      _isPlayingAudio = false;
-      return;
+  /// Process queued audio chunks sequentially.
+  Future<void> _processAudioQueue() async {
+    while (_audioQueue.isNotEmpty) {
+      // Grab all currently queued chunks and merge into one WAV.
+      final chunks = List<Uint8List>.from(_audioQueue);
+      _audioQueue.clear();
+
+      // Merge all chunks into a single PCM buffer.
+      int totalLen = 0;
+      for (final c in chunks) {
+        totalLen += c.length;
+      }
+      final merged = Uint8List(totalLen);
+      int offset = 0;
+      for (final c in chunks) {
+        merged.setRange(offset, offset + c.length, c);
+        offset += c.length;
+      }
+
+      debugPrint('[Audio] Playing ${chunks.length} chunks, ${merged.length} bytes');
+
+      try {
+        // Create WAV from merged PCM (24kHz, 16-bit, mono — Gemini Live output format).
+        final wavBytes = _createWavFromPcm(merged, 24000, 1, 16);
+        final source = _InMemoryAudioSource(wavBytes);
+        await _audioPlayer.setAudioSource(source);
+        await _audioPlayer.play();
+
+        // Wait for playback to finish.
+        await _audioPlayer.playerStateStream.firstWhere(
+          (state) => state.processingState == ProcessingState.completed,
+        );
+      } catch (e) {
+        debugPrint('[Audio Playback] Play error: $e');
+      }
+
+      // Small delay to let more chunks accumulate for smoother playback.
+      await Future.delayed(const Duration(milliseconds: 50));
     }
 
-    try {
-      // Create WAV header for raw PCM data (24kHz, 16-bit, mono)
-      final pcmBytes = Uint8List.fromList(_audioBuffer);
-      _audioBuffer.clear();
-      final wavBytes = _createWavFromPcm(pcmBytes, 24000, 1, 16);
-
-      final source = _InMemoryAudioSource(wavBytes);
-      await _audioPlayer.setAudioSource(source);
-      await _audioPlayer.play();
-
-      // Wait for playback to finish, then flush any remaining.
-      _audioPlayer.playerStateStream.listen((state) {
-        if (state.processingState == ProcessingState.completed) {
-          _isPlayingAudio = false;
-          if (_audioBuffer.isNotEmpty) {
-            _flushAudioBuffer();
-          }
-        }
-      });
-    } catch (e) {
-      debugPrint('[Audio Playback] Flush error: $e');
-      _isPlayingAudio = false;
-    }
+    _isPlayingAudio = false;
   }
 
   /// Create a minimal WAV file from raw PCM bytes.

@@ -19,7 +19,8 @@ def _init_firebase():
     try:
         firebase_admin.get_app()
     except ValueError:
-        project_id = os.environ.get("GOOGLE_CLOUD_PROJECT", "boreal-graph-465506-f2")
+        from server.config import PROJECT_ID
+        project_id = PROJECT_ID
         firebase_admin.initialize_app(options={"projectId": project_id})
 
 

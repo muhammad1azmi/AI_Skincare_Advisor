@@ -12,8 +12,10 @@ import asyncio
 import vertexai
 
 
-PROJECT_ID = "boreal-graph-465506-f2"
-LOCATION = "us-central1"
+import os
+
+PROJECT_ID = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
+LOCATION = os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1")
 
 
 async def main():

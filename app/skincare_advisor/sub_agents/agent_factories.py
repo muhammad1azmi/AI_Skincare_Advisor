@@ -14,7 +14,7 @@ from google.adk.tools.vertex_ai_search_tool import VertexAiSearchTool
 
 from ..tools.skin_tools import save_analysis_to_state
 
-_PROJECT_ID = os.environ.get("GOOGLE_CLOUD_PROJECT", "boreal-graph-465506-f2")
+_PROJECT_ID = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
 _PROMPTS_DIR = os.path.join(os.path.dirname(__file__), "..", "prompts")
 
 # ─── Datastore IDs (single source of truth) ───

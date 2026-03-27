@@ -68,7 +68,7 @@ class ModelArmorService:
             return
 
         project_id = os.environ.get(
-            "GOOGLE_CLOUD_PROJECT", "boreal-graph-465506-f2"
+            "GOOGLE_CLOUD_PROJECT", ""
         )
         location_id = os.environ.get("MODEL_ARMOR_LOCATION", "us-central1")
 

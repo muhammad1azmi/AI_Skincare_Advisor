@@ -28,7 +28,8 @@ def _init_firebase():
 
     # On Cloud Run: auto-discovers credentials via metadata server
     # Locally: uses GOOGLE_APPLICATION_CREDENTIALS or gcloud ADC
-    project_id = os.environ.get("GOOGLE_CLOUD_PROJECT", "boreal-graph-465506-f2")
+    from server.config import PROJECT_ID
+    project_id = PROJECT_ID
     try:
         _firebase_app = firebase_admin.initialize_app(
             options={"projectId": project_id}

@@ -4,7 +4,7 @@ import os
 from google.adk.agents import Agent
 from google.adk.tools.vertex_ai_search_tool import VertexAiSearchTool
 
-_PROJECT_ID = os.environ.get("GOOGLE_CLOUD_PROJECT", "boreal-graph-465506-f2")
+_PROJECT_ID = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
 _DATASTORE_ID = f"projects/{_PROJECT_ID}/locations/global/collections/default_collection/dataStores/skincare-education_1772285841134"
 
 # Load prompt from file

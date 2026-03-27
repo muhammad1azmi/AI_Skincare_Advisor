@@ -4,117 +4,110 @@
 
 ---
 
-## The Problem
+## It Started with a Frustrating Appointment
 
-Getting personalized skincare advice is surprisingly hard. A dermatologist visit costs $150–$300, wait times can stretch to weeks, and in many parts of the world, dermatologists simply aren't available. Meanwhile, online skincare advice is a mess — conflicting opinions, product sponsorships disguised as recommendations, and zero personalization.
+A few months ago, I tried booking a dermatologist. The earliest slot was six weeks out, and the consultation fee was $200. When I finally got in, the doctor spent about ten minutes looking at my skin, gave me a generic routine, and sent me on my way.
 
-Most "AI skincare tools" are just chatbots. You type, they reply. They can't see your skin, can't hear you describe your concerns naturally, and definitely can't be interrupted mid-sentence when they go off on a tangent.
+On the drive home, I thought: what if I could just *show* my skin to an AI and talk through my concerns in real time? Not a chatbot where I type "my skin is dry" and get a wall of text back — a real conversation where the AI can actually *see* what I'm describing.
 
-I wanted to build something different: **an AI that can see, hear, and speak — like video-calling a skincare expert who actually knows you.**
+That was the spark for **Glow**.
 
-## Meet Glow
+## The First Prototype Was Terrible
 
-Glow is a mobile app that provides real-time, multimodal skincare consultations. You open the app, tap "Start Consultation," and begin talking to an AI advisor while pointing your camera at your skin. The AI:
+My first attempt was simple: a text chatbot built with the Gemini API. You'd describe your skin in text, and it would respond. It worked, technically. But it missed the entire point.
 
-- **Sees** your skin through live camera streaming (1 FPS JPEG frames)
-- **Listens** to your concerns via real-time audio streaming (PCM 16kHz)
-- **Speaks back** with natural voice responses
-- **Handles interruptions** — talk over it, and it stops and listens
-- **Remembers you** across sessions — your skin type, past concerns, routines
+Skincare is visual. When someone says "I have these spots on my cheek," the difference between post-inflammatory hyperpigmentation and fungal acne changes the advice completely. And typing out skin concerns feels unnatural — people want to *talk* about their skin while *showing* it.
 
-It's built entirely on Google's AI stack: **ADK** (Agent Development Kit) for multi-agent orchestration, **Gemini 2.5 Flash** via the **Live API** for real-time multimodal reasoning, and **Google Cloud** for production hosting.
+So I threw away the chatbot and started over with the **Gemini Live API**. This was the turning point.
 
-## The Architecture: Three Pillars
+## Discovering Gemini Live API and ADK
 
-### 1. Security-First 🛡️
+The Gemini Live API enables bidirectional streaming — you send audio and video in real time, and the model responds with voice. It's not request-response; it's a continuous stream. You can interrupt the AI mid-sentence, and it stops and listens. It feels like a real conversation.
 
-Glow handles health-adjacent conversations and live camera data. Security couldn't be an afterthought — it had to be the foundation. I implemented **5 layers of defense-in-depth**:
+But I quickly realized a single model call wouldn't cut it. Skincare spans too many domains: analyzing skin conditions, checking ingredient interactions, building personalized routines, tracking progress over time. One model with one prompt would either be mediocre at everything or hallucinate wildly.
 
-**Google Cloud Model Armor** is the star here. It's a managed ML-powered service that sanitizes both inputs and outputs, catching prompt injection attempts, jailbreak attacks, PII leakage, harmful content, and malicious URLs. Before Model Armor, I was writing regex patterns to catch injection attacks — fragile, incomplete, and constantly needing updates. Model Armor replaced all of that with a single API call.
+That's when I found **Google ADK** (Agent Development Kit). ADK lets you build multi-agent systems where a root orchestrator routes requests to specialist agents, each with their own knowledge, tools, and prompts. This was exactly what I needed.
 
-On top of Model Armor, I added **domain-specific guardrails** via ADK's `before_model_callback` and `after_model_callback`. The before-callback catches explicit medical requests ("prescribe me tretinoin") and redirects users to healthcare professionals. The after-callback screens the AI's output for medical language that shouldn't appear in a skincare advisor's response.
+I designed **11 specialist agents** — a Skin Analyzer that processes camera frames, a Routine Builder grounded with Vertex AI Search, an Ingredient Interaction agent that catches dangerous combinations (like vitamin C + retinol in the same step), a Progress Tracker that compares your skin over time, and more.
 
-Then there are **Gemini's built-in safety filters** (configured to `BLOCK_MEDIUM_AND_ABOVE`) and **explicit prompt guardrails** in the root orchestrator's instructions.
+The root orchestrator listens to the user, decides which specialist to call, waits for the result, and speaks it back — all in real time over voice.
 
-Five layers might sound excessive, but for a health-adjacent AI that processes camera data and voice, defense-in-depth is the only responsible approach.
+## The AgentTool Breakthrough
 
-### 2. Observability-First 📊
+The biggest technical wall I hit was that the Live API doesn't support mixing tool types. Most of my sub-agents use `VertexAiSearchTool` for RAG-grounded responses — they query real skincare knowledge datastores, not just whatever the model remembers from training. But `VertexAiSearchTool` doesn't work inside a live streaming session.
 
-"Works on my machine" isn't good enough for an AI agent. You can't improve what you can't measure.
+I was stuck for a while. Then I found the `AgentTool` pattern in ADK's documentation. Instead of using sub-agents directly (which would inherit the live session), you wrap each sub-agent as an `AgentTool`. When the orchestrator calls it, ADK spins up a completely independent execution context — new Runner, new session, standard async mode. The sub-agent runs its Vertex AI Search queries happily in isolation, and the text result flows back to the live model like any tool response.
 
-From day one, I instrumented everything. All agent interactions flow into a **BigQuery dataset** (`adk_agent_logs`) where I can analyze routing decisions, response quality, tool call success rates, and session patterns. ADK's built-in **OpenTelemetry integration** captures every agent run, LLM call, and tool invocation as spans, exported to **Cloud Trace**.
+This single pattern unlocked the entire multi-agent architecture. Without it, I would have been limited to a single agent with no grounding.
 
-This observability infrastructure paid for itself immediately. I discovered that the Skin Analyzer agent was being routed too aggressively — general questions like "what's a good moisturizer?" were being sent to the skin analysis specialist instead of the Q&A agent. BigQuery trace analysis surfaced the pattern, and I tuned the routing prompt accordingly.
+## Security Kept Me Up at Night
 
-### 3. Eval-Driven Development 🧪
+Here's the thing about building an AI that sees people's skin and listens to their health concerns — you can't ship it with just "hope the model behaves." This is health-adjacent. People will ask it to prescribe medication. People will try to jailbreak it. And the camera stream means you're processing sensitive biometric-adjacent data.
 
-Here's a hot take: **most AI agent development is vibes-based**. You tweak a prompt, manually test a few queries, and ship it. This doesn't scale.
+I ended up building **five layers of security**, and each layer exists because the one above it isn't enough:
 
-I used ADK's evaluation framework to iterate on agent quality scientifically:
+First, I integrated **Google Cloud Model Armor** — it's an ML-powered service that sanitizes both inputs and outputs. It catches prompt injection, jailbreak attempts, PII leakage, harmful content, and malicious URLs. Before I found Model Armor, I was writing regex patterns to detect prompt injections. That approach was fragile and always one step behind attackers. Model Armor replaced all of it with a single API call.
 
-- **Routing accuracy tests**: Does the root orchestrator pick the correct specialist for each query type?
-- **Safety guardrail tests**: Are medical/prescription requests properly deflected?
-- **Response quality evaluations**: Are skincare recommendations relevant, accurate, and appropriately cautious?
+But Model Armor doesn't know about skincare-specific boundaries. It won't block "prescribe me tretinoin" because that's a legitimate sentence — just not one a skincare advisor should respond to. So I added a **`before_model_callback`** with domain-specific medical pattern matching.
 
-Every prompt change goes through the eval pipeline before deployment. This caught several issues early, including cases where the ingredient checker would confidently recommend ingredient combinations that dermatologists advise against.
+Then I added an **`after_model_callback`** that screens the AI's output — even if the input wasn't flagged, the model might still generate medical-sounding language. This layer catches it.
 
-## The Multi-Agent System
+Layers four and five are Gemini's built-in safety filters and explicit prompt guardrails in the root orchestrator's instructions.
 
-Glow isn't one monolithic AI — it's a team of **11 specialized agents** coordinated by a root orchestrator:
+Five layers sounds excessive. But for a health-adjacent AI processing camera data and voice? Defense-in-depth is the only responsible approach.
 
-- **Skin Analyzer** — analyzes skin from the live camera feed
-- **Routine Builder** — creates personalized AM/PM skincare routines
-- **Ingredient Checker** — verifies ingredient safety and efficacy
-- **Ingredient Interaction Agent** — checks for harmful ingredient combinations
-- **Skin Condition Agent** — identifies and explains skin conditions
-- **Q&A Agent** — answers general skincare questions
-- **KOL Content Agent** — recommends influencer-curated content from BigQuery
-- **Progress Tracker** — tracks skin improvements over time
+## The Debugging Nightmare: Live Sessions
 
-Plus three **composite workflow agents** that orchestrate multiple sub-agents: parallel ingredient checking, end-to-end consultation pipeline, and iterative routine review.
+The most frustrating bug I encountered was with session management. In production, I use `VertexAiSessionService` for persistent sessions — it stores conversation history so the AI remembers users across sessions. But when I connected it to `run_live()`, the stream would close immediately. No error, no crash — just... silence.
 
-### The AgentTool Pattern
+After hours of debugging with OpenTelemetry traces, I discovered the issue: Vertex AI's session service calls an `events.list()` API internally that's incompatible with the live streaming protocol. The API call blocks the stream before it can even start.
 
-The biggest technical challenge was making multi-agent orchestration work with Gemini's native-audio live model. The Live API doesn't support mixing tool types within the same session — meaning `VertexAiSearchTool` (used by most sub-agents) won't work directly in a live session.
+The fix was counterintuitive: use `InMemorySessionService` for live sessions (voice/video), while keeping `VertexAiSessionService` for text-based sessions and memory. The live session is ephemeral, but memory persistence still works because `VertexAiMemoryBankService` runs independently.
 
-The solution: **wrap every sub-agent as an `AgentTool`**. When the root orchestrator calls `AgentTool.run_async()`, it creates a completely independent `Runner` + `InMemorySessionService` context. The sub-agent runs in standard async mode (not live streaming), so tools like `VertexAiSearchTool` work perfectly. The text result flows back to the live model like any function response.
+This is the kind of thing no documentation tells you. It took raw debugging.
 
-This pattern is clean, scalable, and avoids the tool-type conflicts entirely.
+## Making the AI Remember You
 
-## The Tech Stack
+One of Glow's best features is **cross-session memory**. The AI remembers your skin type, past concerns, products you've tried, and routines you're following. Session three doesn't start from scratch.
 
-| Component | Technology |
-|---|---|
-| AI Model | Gemini 2.5 Flash (native audio) |
-| Agent Framework | Google ADK |
-| Real-time Streaming | Gemini Live API + `LiveRequestQueue` |
-| Backend | FastAPI on Cloud Run |
-| Agent Hosting | Vertex AI Agent Engine (EXPERIMENTAL mode) |
-| Security | Google Cloud Model Armor |
-| Search & Grounding | Vertex AI Search |
-| Analytics | BigQuery |
-| Auth | Firebase Auth |
-| Push Notifications | Firebase Cloud Messaging |
-| Mobile App | Flutter (Android) |
-| CI/CD | GitHub Actions → Firebase App Distribution |
-| Deployment | Infrastructure-as-Code scripts |
+I used ADK's `PreloadMemoryTool` and `generate_memories_callback`. After each conversation turn, the callback generates memory snippets — observations about the user's skin, product preferences, and concern history. On the next session, `PreloadMemoryTool` retrieves relevant memories and injects them into context.
 
-## Key Learnings
+The first time a user comes back and the AI says "Last time we talked about the dryness around your nose — how's that been going?", the experience changes completely. It goes from "talking to a tool" to "talking to *my* skincare advisor."
 
-1. **Model Armor is a game-changer.** Stop writing regex for prompt injection detection. Google's ML-powered sanitization provides better coverage with zero maintenance.
+## Observability: You Can't Improve What You Can't Measure
 
-2. **The AgentTool pattern is essential** for complex multi-agent systems with Gemini Live API. Sub-agents need independent execution contexts.
+I integrated **BigQuery Agent Analytics** from day one. Every agent interaction — routing decisions, tool calls, response times — flows into a BigQuery dataset. Combined with OpenTelemetry tracing, I can see exactly what happened in any conversation.
 
-3. **Eval-driven development saves time.** Automated evaluation caught subtle routing and safety issues that manual testing would have missed.
+This paid off almost immediately. I noticed the Skin Analyzer agent was being called for general questions like "what's a good moisturizer?" — questions that should go to the Q&A agent. The BigQuery logs showed a routing bias in the orchestrator's prompt. I tuned the prompt, re-ran the evaluation suite, and the mis-routing dropped to zero.
 
-4. **Observability from day one.** BigQuery analytics surfaced agent behavior patterns (routing biases, error rates) that would have been invisible without instrumentation.
+Without observability, I never would have noticed this pattern. The model still gave plausible answers through the wrong agent — it just wasn't using the knowledge grounding it should have been.
 
-5. **Bidi-streaming is powerful but tricky.** Getting `LiveRequestQueue` working end-to-end on Agent Engine required working through EXPERIMENTAL mode nuances — but the real-time voice + video experience is worth it.
+## Eval-Driven: No More Vibes-Based Development
 
-## What's Next
+Here's a hot take: most AI agent development is vibes-based. You tweak a prompt, manually test a few queries, and ship it. This doesn't scale.
 
-Glow is a proof of concept of what's possible when you combine real-time multimodal AI with production-grade architecture. The vision is to make expert-level skincare advice accessible to anyone with a smartphone — while always encouraging professional consultation for serious concerns.
+I set up ADK's evaluation framework with test suites covering routing accuracy, safety guardrails, and response quality. Every prompt change runs through automated evals before deployment.
+
+The evals caught a critical issue early: the Ingredient Checker was confidently recommending vitamin C and retinol in the same routine step — a combination most dermatologists advise against for sensitive skin. The eval flagged it, I added interaction-checking logic, and the issue was resolved before any user encountered it.
+
+## Deploying to Google Cloud
+
+The production stack runs on **Google Cloud Run** (FastAPI WebSocket server), **Vertex AI Agent Engine** (managed agent hosting with bidi-streaming), **Vertex AI Search** (RAG datastores), **BigQuery** (analytics + KOL content), **Firebase Auth** (Google Sign-In), and **Firebase Cloud Messaging** (push notifications for routine reminders).
+
+I automated everything with infrastructure-as-code scripts — a single `setup-gcp.sh` creates the entire GCP infrastructure, `deploy.py` handles Agent Engine deployment, and GitHub Actions builds and distributes the Flutter APK via Firebase App Distribution.
+
+The whole thing can be reproduced from a fresh GCP project with three scripts and one git push.
+
+## What I Learned
+
+Building Glow taught me that the gap between a demo and a product is enormous. The Live API demo took a day. Making it production-ready — with security, observability, eval-driven quality, persistent memory, and proper error handling — took weeks.
+
+But the result is something I'm genuinely proud of: an AI that can see your skin, hear your concerns, remember your history, and give grounded, safe advice — all in real time, all running on Google Cloud.
+
+The vision is simple: expert-level skincare advice accessible to anyone with a smartphone. While always encouraging professional consultation for serious concerns.
 
 ---
 
-*Built with Google ADK, Gemini 2.5 Flash, and Google Cloud. #GeminiLiveAgentChallenge*
+*Built with ❤️ using Google ADK, Gemini 2.5 Flash, and Google Cloud for the #GeminiLiveAgentChallenge*
+
+*#GeminiLiveAgentChallenge*

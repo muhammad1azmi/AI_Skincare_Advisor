@@ -18,7 +18,7 @@ from dotenv import load_dotenv
 _root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 load_dotenv(os.path.join(_root_dir, "app", ".env"))
 
-PROJECT_ID = os.environ.get("GOOGLE_CLOUD_PROJECT", "boreal-graph-465506-f2")
+PROJECT_ID = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
 LOCATION_ID = os.environ.get("MODEL_ARMOR_LOCATION", "us-central1")
 TEMPLATE_ID = "skincare-advisor-safety"
 

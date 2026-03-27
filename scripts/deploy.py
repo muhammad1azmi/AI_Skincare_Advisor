@@ -34,7 +34,7 @@ load_dotenv(os.path.join(_root_dir, "app", ".env"))
 sys.path.insert(0, os.path.join(_root_dir, "app"))
 
 
-PROJECT_ID = os.environ.get("GOOGLE_CLOUD_PROJECT", "boreal-graph-465506-f2")
+PROJECT_ID = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
 LOCATION = os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1")
 STAGING_BUCKET = os.environ.get("GCS_STAGING_BUCKET")
 AGENT_ENGINE_ID = os.environ.get("AGENT_ENGINE_ID")

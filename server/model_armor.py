@@ -67,9 +67,8 @@ class ModelArmorService:
             )
             return
 
-        project_id = os.environ.get(
-            "GOOGLE_CLOUD_PROJECT", "boreal-graph-465506-f2"
-        )
+        from server.config import PROJECT_ID
+        project_id = PROJECT_ID
         location_id = os.environ.get("MODEL_ARMOR_LOCATION", "us-central1")
 
         self._template_name = (

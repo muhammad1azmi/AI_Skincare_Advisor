@@ -1,28 +1,30 @@
-# AI Skincare Advisor — Project Document
+# Glow — AI Skincare Advisor — Project Document
 
 > **Powered by Google ADK & Gemini Live API**
 > Real-time multimodal skincare analysis and personalized recommendations using voice, video, and text interaction.
 >
-> Version 1.0 | February 2026
-> Google Cloud · Google ADK · Gemini · Firebase
+> Version 2.0 | March 2026
+> Google Cloud · Google ADK · Gemini · Firebase · Model Armor
 
 ---
 
 ## 1. Executive Summary
 
-The AI Skincare Advisor is an intelligent, real-time skincare consultation platform that leverages Google's Agent Development Kit (ADK) and Gemini Live API to deliver personalized skincare guidance through natural voice, video, and text interactions.
+**Glow** is an intelligent, real-time skincare consultation platform that leverages Google's Agent Development Kit (ADK) and Gemini Live API to deliver personalized skincare guidance through natural voice, video, and text interactions.
 
-Users can point their camera at their skin, speak about their concerns, and receive immediate, contextual advice from a multi-agent AI system. The platform analyzes visible skin conditions, recommends tailored routines, checks ingredient compatibility, and tracks progress over time — all within a fully Google-native technology stack.
+Users can point their camera at their skin, speak about their concerns, and receive immediate, contextual advice from a multi-agent AI system featuring 8 specialist agents and 3 workflow agents. The platform analyzes visible skin conditions, recommends tailored routines, checks ingredient safety and interactions, finds relevant KOL content, and tracks progress over time — all within a fully Google-native technology stack.
 
 > **Mission:** Democratize access to personalized skincare advice through AI, making expert-level guidance available to anyone with a smartphone — while always encouraging professional dermatological consultation for serious concerns.
 
 ### 1.1 Key Objectives
 
-- Provide real-time, multimodal skincare analysis via voice and video using Gemini Live API
-- Build a multi-agent system with specialized agents for skin analysis, routine building, ingredient checking, and progress tracking
-- Deliver personalized, evidence-based skincare recommendations grounded in dermatological knowledge
-- Ensure user privacy and data security with encrypted storage and full user control over their data
-- Deploy on a fully Google-native stack: ADK, Gemini, Firebase, Cloud Run, Vertex AI
+- Provide real-time, multimodal skincare analysis via voice and video using Gemini Live API with native audio
+- Build a multi-agent system with 8 specialist agents and 3 workflow agents (parallel, sequential, loop patterns) via ADK
+- Deliver personalized, evidence-based skincare recommendations grounded in Vertex AI Search datastores
+- Ensure user safety with defense-in-depth: Google Cloud Model Armor, ADK callbacks, and Gemini safety filters
+- Enable cross-session memory with Vertex AI Memory Bank for personalized continuity
+- Track all agent interactions via BigQuery Agent Analytics Plugin for observability
+- Deploy on a fully Google-native stack: ADK, Gemini, Firebase, Cloud Run, Vertex AI Agent Engine
 
 ### 1.2 Target Users
 
@@ -41,62 +43,77 @@ The system follows a layered architecture built entirely on Google Cloud service
 
 | Layer | Purpose | Google Services |
 |---|---|---|
-| Presentation Layer | User-facing interfaces (mobile, web) | Flutter, Angular, Firebase Hosting |
-| Streaming Layer | Real-time bidirectional communication | Gemini Live API, WebSocket, WebRTC |
-| Agent Orchestration Layer | Multi-agent coordination and routing | Google ADK (Agent Development Kit) |
-| Intelligence Layer | LLM reasoning, RAG, and knowledge | Gemini 2.5 Flash, Vertex AI RAG Engine |
-| Data & Storage Layer | User data, media, knowledge base | Firestore, Cloud Storage, Vertex AI Vector Search |
-| Observability Layer | LLM tracing, evaluation, monitoring | Cloud Trace, Cloud Logging, OpenTelemetry |
+| Presentation Layer | User-facing mobile interface | Flutter (iOS/Android) |
+| Streaming Layer | Real-time bidirectional communication | Gemini Live API, WebSocket |
+| Agent Orchestration Layer | Multi-agent coordination, routing, and workflows | Google ADK (`AgentTool`, `SequentialAgent`, `ParallelAgent`, `LoopAgent`) |
+| Intelligence Layer | LLM reasoning, knowledge retrieval, thinking | Gemini Live 2.5 Flash (native audio), Gemini 2.5 Flash, Vertex AI Search |
+| Security Layer | Input/output sanitization, safety guardrails | Google Cloud Model Armor, ADK callbacks, Gemini safety filters |
+| Data & Storage Layer | User data, media, knowledge datastores | Firestore, Cloud Storage, Vertex AI Search datastores |
+| Observability Layer | Agent analytics, tracing, structured logging | BigQuery Agent Analytics Plugin, OpenTelemetry |
+| Engagement Layer | Push notifications, routine reminders, product deals | Firebase Cloud Messaging (FCM) |
 
 ### 2.2 High-Level Architecture Diagram
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │                     PRESENTATION LAYER                       │
-│  ┌────────────────┐ ┌───────────────┐ ┌───────────────┐     │
-│  │  Flutter App   │ │  Angular Web  │ │ Firebase Host │     │
-│  │  (iOS/Android) │ │   (Desktop)   │ │   (Static)    │     │
-│  └───────┬────────┘ └───────┬───────┘ └───────┬───────┘     │
-└──────────┼──────────────────┼─────────────────┼─────────────┘
-           │    WebSocket/WebRTC                 │
-┌──────────┴──────────────────┴─────────────────┴─────────────┐
+│  ┌────────────────────────────────────────────────────┐      │
+│  │  Flutter App "Glow"  (iOS/Android)                 │      │
+│  │  Camera · Microphone · Push Notifications          │      │
+│  └───────────────────────┬────────────────────────────┘      │
+└──────────────────────────┼───────────────────────────────────┘
+                           │    WebSocket (audio/video/text)
+┌──────────────────────────┴───────────────────────────────────┐
 │              STREAMING LAYER (Cloud Run)                      │
 │           FastAPI + ADK Bidi-Streaming Server                 │
 │  ┌─────────────────────────────────────┐                     │
 │  │  LiveRequestQueue (ADK)             │                     │
-│  │  Session Management                 │                     │
-│  │  Audio/Video Stream Handler         │                     │
+│  │  Firebase Auth (JWT verification)   │                     │
+│  │  Rate Limiting + Session Mgmt       │                     │
+│  │  Binary audio / JSON text framing   │                     │
 │  └──────────────────┬──────────────────┘                     │
 └─────────────────────┼────────────────────────────────────────┘
                       │
 ┌─────────────────────┴────────────────────────────────────────┐
 │           AGENT ORCHESTRATION LAYER (Google ADK)             │
 │  ┌────────────────────────────────────────────────┐          │
-│  │           Root Orchestrator Agent               │          │
-│  └──┬────────┬────────┬────────┬────────┬─────────┘          │
-│     │        │        │        │        │                    │
-│  ┌──┴───┐ ┌──┴───┐ ┌──┴────┐ ┌─┴──────┐ ┌┴─────┐           │
-│  │ Skin │ │Rout- │ │Ingre- │ │Progress│ │ Q&A  │           │
-│  │Analy-│ │ine   │ │dient  │ │Tracker │ │Agent │           │
-│  │zer   │ │Build-│ │Checker│ │        │ │      │           │
-│  └──────┘ │er    │ └───────┘ └────────┘ └──────┘           │
-│           └──────┘                                          │
+│  │     Root Orchestrator Agent (skincare_advisor)  │          │
+│  │     Model: gemini-live-2.5-flash-native-audio   │          │
+│  │     BuiltInPlanner (thinking_budget=1024)       │          │
+│  │     PreloadMemoryTool + AgentTool wrappers      │          │
+│  └──┬────┬────┬────┬────┬────┬────┬────┬─────────┘          │
+│     │    │    │    │    │    │    │    │                      │
+│  ┌──┴──┐┌┴──┐┌┴──┐┌┴──┐┌┴──┐┌┴──┐┌┴──┐┌┴─────┐             │
+│  │Skin ││Rou││Ing││Ing││Ski││Q&A││KOL││Prog- │             │
+│  │Anal-││tin││red││red││n  ││   ││Con││ress  │             │
+│  │yzer ││e  ││ie-││ie-││Con││   ││ten││Track │             │
+│  │     ││Bui││nt ││nt ││dit││   ││t  ││er    │             │
+│  │     ││ld ││Chk││Int││ion││   ││   ││      │             │
+│  └─────┘│er │└───┘│er │└───┘└───┘└───┘└──────┘             │
+│          └───┘     └───┘                                     │
+│  ┌──── Workflow Agents (composite patterns) ─────────────┐  │
+│  │  ParallelAgent: Parallel Ingredient Check             │  │
+│  │  SequentialAgent: Full Consultation Pipeline           │  │
+│  │  SequentialAgent+LoopAgent: Routine Review Loop        │  │
+│  └───────────────────────────────────────────────────────┘  │
 └──────────────────────────────────────────────────────────────┘
                       │
 ┌─────────────────────┴────────────────────────────────────────┐
-│                 INTELLIGENCE LAYER                            │
+│                 SECURITY LAYER                                │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐        │
-│  │ Gemini 2.5   │  │ Vertex AI    │  │ Google       │        │
-│  │ Flash (Live) │  │ RAG Engine   │  │ Search       │        │
+│  │ Model Armor  │  │ ADK Callback │  │ Gemini Built │        │
+│  │ (PI, PII,    │  │ before/after │  │ -in Safety   │        │
+│  │  RAI, URIs)  │  │ + medical    │  │ Filters      │        │
 │  └──────────────┘  └──────────────┘  └──────────────┘        │
 └──────────────────────────────────────────────────────────────┘
                       │
 ┌─────────────────────┴────────────────────────────────────────┐
-│                 DATA & STORAGE LAYER                          │
+│                 DATA & OBSERVABILITY LAYER                    │
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌────────────┐      │
-│  │Firestore │ │  Cloud   │ │ Vertex   │ │ Vertex     │      │
-│  │ (Users)  │ │ Storage  │ │ AI Vec.  │ │ AI RAG     │      │
-│  └──────────┘ └──────────┘ └──────────┘ └────────────┘      │
+│  │Firestore │ │ Cloud    │ │ Vertex   │ │ BigQuery   │      │
+│  │(Sessions)│ │ Storage  │ │ AI Search│ │ Analytics  │      │
+│  └──────────┘ └──────────┘ │(5 stores)│ │  Plugin    │      │
+│                             └──────────┘ └────────────┘      │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -104,586 +121,792 @@ The system follows a layered architecture built entirely on Google Cloud service
 
 | Layer | Technology | Purpose |
 |---|---|---|
-| Agent Framework | Google ADK (Python) | Multi-agent orchestration, tool management, streaming |
-| LLM Engine | Gemini 2.5 Flash (Live API) | Real-time multimodal reasoning (audio + video + text) |
-| Search & Grounding | Google Search Tool (ADK built-in) | Real-time product/ingredient information retrieval |
+| Agent Framework | Google ADK v1.23.0 (Python) | Multi-agent orchestration, AgentTool, workflow agents, streaming |
+| Root LLM | Gemini Live 2.5 Flash (native audio) | Real-time multimodal reasoning with native audio input/output |
+| Sub-Agent LLM | Gemini 2.5 Flash | Text-based specialist reasoning for sub-agents |
+| Knowledge Retrieval | Vertex AI Search Tool (5 datastores) | Grounded retrieval: ingredients, interactions, conditions, routines, KOL content |
+| Agent Planning | BuiltInPlanner (ThinkingConfig) | Native Gemini thinking for tool selection and reasoning |
+| Cross-Session Memory | Vertex AI Memory Bank + PreloadMemoryTool | Persistent user preferences, skin type, concerns across sessions |
+| Security | Google Cloud Model Armor | ML-powered prompt/response sanitization (PI, PII, RAI, malicious URIs) |
 | Backend Runtime | Cloud Run | Serverless container hosting for FastAPI + ADK server |
-| Production Deployment | Vertex AI Agent Engine | Enterprise-grade agent hosting, scaling, management |
-| User Database | Cloud Firestore | User profiles, skin history, routine data |
-| Media Storage | Cloud Storage | Skin photos, progress images, uploaded product labels |
-| Knowledge Base | Vertex AI RAG Engine | Dermatological knowledge, ingredient database |
-| Vector Search | Vertex AI Vector Search | Semantic search over skincare knowledge embeddings |
-| Authentication | Firebase Authentication | User sign-up/login (Google, email, phone) |
-| Mobile Frontend | Flutter | Cross-platform iOS/Android app with camera/mic access |
-| Web Frontend | Angular | Desktop web application |
-| Hosting | Firebase Hosting | Static web assets and CDN |
-| Observability | Cloud Trace + Cloud Logging | OpenTelemetry-based LLM tracing and monitoring |
-| LLM Evaluation | Vertex AI Evaluation / Phoenix | Agent performance evaluation and prompt optimization |
-| CI/CD | Cloud Build | Automated testing, building, and deployment |
+| Production Deployment | Vertex AI Agent Engine | Enterprise-grade agent hosting, scaling, session/memory management |
+| Observability | BigQuery Agent Analytics Plugin | Agent event logging, tool calls, LLM interactions, multimodal content |
+| Distributed Tracing | OpenTelemetry SDK | Trace IDs correlation across agent/tool spans |
+| User Database | Cloud Firestore | User sessions, skin history, routine data |
+| Authentication | Firebase Authentication | User sign-up/login (Google Sign-In, email/password) |
+| Push Notifications | Firebase Cloud Messaging (FCM) | Routine reminders, follow-up nudges, product deal notifications |
+| Mobile Frontend | Flutter | Cross-platform iOS/Android app with camera, mic, push notification support |
+| Container | Python 3.13-slim, Docker | Production container with non-root user |
+| CI/CD | Cloud Build + deploy scripts | Automated build and deployment |
 | Secrets | Secret Manager | API keys and credential management |
 
 ### 2.4 Data Flow
 
 | Step | Action | Services Involved |
 |---|---|---|
-| 1 | User opens app, authenticates via Firebase Auth | Flutter/Angular, Firebase Auth |
-| 2 | Client establishes WebSocket connection to backend | Client, Cloud Run (FastAPI) |
-| 3 | ADK creates LiveRequestQueue and session | ADK Runner, Firestore Session Service |
-| 4 | User streams audio/video to backend | WebSocket, ADK Bidi-Streaming |
-| 5 | ADK routes to Root Orchestrator Agent | ADK Runner, Gemini Live API |
-| 6 | Root Agent delegates to specialized sub-agent | ADK LLM-driven transfer |
-| 7 | Sub-agent uses tools (search, DB lookup, RAG) | Google Search, Firestore, Vertex AI RAG |
-| 8 | Agent generates response (text + audio) | Gemini 2.5 Flash |
-| 9 | Response streamed back to client in real-time | WebSocket, ADK event stream |
-| 10 | Session state persisted for continuity | Firestore Session Service |
-| 11 | All interactions traced for observability | OpenTelemetry, Cloud Trace |
+| 1 | User opens Glow app, authenticates via Firebase Auth | Flutter, Firebase Auth |
+| 2 | Client establishes WebSocket connection to backend (`/ws/{user_id}/{session_id}`) | Flutter, Cloud Run (FastAPI) |
+| 3 | Server verifies Firebase JWT, creates InMemory live session | FastAPI, Firebase Auth, ADK |
+| 4 | LiveRequestQueue created, RunConfig set (AUDIO modality, BIDI streaming, Aoede voice) | ADK Runner |
+| 5 | User streams audio/video/text to backend via WebSocket | WebSocket, LiveRequestQueue |
+| 6 | Root Orchestrator Agent receives input, BuiltInPlanner reasons about routing | ADK, Gemini Live API |
+| 7 | Root Agent calls specialist AgentTool (executed via `run_async` in isolated context) | AgentTool, Gemini 2.5 Flash |
+| 8 | Sub-agent uses Vertex AI Search Tool to retrieve grounded knowledge | Vertex AI Search datastores |
+| 9 | Tool results streamed back to client (toolEvent call/result JSON frames) | WebSocket |
+| 10 | Audio response streamed as binary WebSocket frames, transcription as JSON | WebSocket |
+| 11 | After-agent callback sends events to Memory Bank for extraction | Vertex AI Memory Bank |
+| 12 | All interactions logged via BigQuery Agent Analytics Plugin | BigQuery |
 
 ---
 
 ## 3. Multi-Agent Architecture
 
-The skincare advisor uses a hierarchical multi-agent system built with Google ADK. A Root Orchestrator Agent receives all user interactions and dynamically routes them to the most appropriate specialized sub-agent using LLM-driven transfer. Each sub-agent is an independent, specialized unit with its own instruction set and tools.
+The skincare advisor uses a hierarchical multi-agent system built with Google ADK. A Root Orchestrator Agent receives all user interactions and uses `AgentTool` wrappers to delegate to specialized sub-agents. Sub-agents execute via `run_async()` in isolated contexts — this avoids the Vertex AI mixed-tool-type limitation with the live audio model.
 
 ### 3.1 Agent Hierarchy
 
 ```
-                 ┌──────────────────────────┐
-                 │  Root Orchestrator Agent  │
-                 │   (skincare_advisor)      │
-                 │  Model: gemini-2.5-flash  │
-                 │  Mode: Bidi-Streaming     │
-                 └──┬────┬────┬────┬────┬───┘
-                    │    │    │    │    │
-              ┌─────┘  ┌─┘  ┌┘   └┐   └──────┐
-         ┌────┴───┐ ┌──┴──┐ ┌┴────┐ ┌──┴───┐ ┌─┴────┐
-         │  Skin  │ │Rout-│ │Ingr-│ │Prog- │ │ Q&A  │
-         │Analyzer│ │ine  │ │edi- │ │ress  │ │Agent │
-         │ Agent  │ │Build│ │ent  │ │Track │ │      │
-         └────────┘ │er   │ │Check│ │er    │ └──────┘
-                    └─────┘ └─────┘ └──────┘
+                     ┌──────────────────────────────┐
+                     │   Root Orchestrator Agent     │
+                     │   (skincare_advisor)          │
+                     │   Model: gemini-live-2.5-     │
+                     │     flash-native-audio        │
+                     │   BuiltInPlanner + Callbacks  │
+                     └──┬──┬──┬──┬──┬──┬──┬──┬──────┘
+                        │  │  │  │  │  │  │  │
+       ┌────────────────┘  │  │  │  │  │  │  └────────┐
+  ┌────┴────┐ ┌────┴───┐ ┌┴──┐ ┌┴──┐ ┌┴──┐ ┌┴──┐ ┌───┴──┐ ┌──┴───┐
+  │  Skin   │ │Routine │ │Ing│ │Ing│ │Ski│ │Q&A│ │ KOL  │ │Prog- │
+  │Analyzer │ │Builder │ │red│ │red│ │n  │ │   │ │Conte-│ │ress  │
+  │         │ │        │ │Chk│ │Int│ │Con│ │   │ │nt    │ │Track │
+  └─────────┘ └────────┘ └───┘ └───┘ └───┘ └───┘ └──────┘ └──────┘
+
+  ┌─── Workflow (Composite) Agents ────────────────────────────────┐
+  │                                                                │
+  │  🔀 Parallel Ingredient Agent                                 │
+  │     ParallelAgent[IngChecker ‖ IngInteraction]                │
+  │     → SequentialAgent → IngredientSynthesis                   │
+  │                                                                │
+  │  📋 Consultation Pipeline Agent                               │
+  │     SequentialAgent[SkinAnalyzer → SkinCondition →            │
+  │       RoutineBuilder → ConsultationSynthesis → KOLContent]    │
+  │                                                                │
+  │  🔄 Routine Review Agent                                      │
+  │     SequentialAgent[RoutineBuilder →                           │
+  │       LoopAgent(max=3)[RoutineCritic → RoutineRefiner]]       │
+  └────────────────────────────────────────────────────────────────┘
 ```
 
 ### 3.2 Root Orchestrator Agent
 
-The Root Orchestrator is the primary entry point for all user interactions. It uses LLM-driven dynamic routing to determine which sub-agent should handle each request. It maintains conversation context and can handle general greetings or clarification questions directly.
+The Root Orchestrator is the primary entry point for all user interactions. It uses the `gemini-live-2.5-flash-native-audio` model for real-time voice conversations and delegates to specialist agents via `AgentTool` wrappers.
+
+**Key Design Decision — AgentTool vs sub_agents:**
+
+Sub-agents are wrapped as `AgentTool` instances (NOT `sub_agents` / `transfer_to_agent`). This is necessary because:
+- `AgentTool.run_async()` creates a NEW Runner + InMemorySessionService
+- It calls `runner.run_async()` (standard async mode), NOT `run_live()`
+- Sub-agents execute in a completely independent context
+- `VertexAiSearchTool` works fine because it's not in a live session
+- The text result is returned to the live model like any function response
 
 **Responsibilities:**
 
 - Receive and interpret all incoming user messages (text, audio, video)
-- Route to the appropriate specialized sub-agent via ADK's LLM transfer mechanism
-- Handle general conversation, greetings, and clarification questions
-- Maintain overall session context and user profile state
-- Enforce safety guardrails and disclaimer messaging
+- Use BuiltInPlanner (ThinkingConfig, budget=1024) to reason about tool selection
+- Route to the appropriate specialist agent via AgentTool
+- PreloadMemoryTool retrieves user memories at the start of every turn
+- Handle general conversation, greetings, and clarification questions directly
+- Enforce safety via before_model_callback (Model Armor + medical checks) and after_model_callback
+- Persist memories via after_agent_callback (Memory Bank integration)
 
 **Code Structure:**
 
 ```python
 from google.adk.agents import Agent
-from sub_agents.skin_analyzer import skin_analyzer_agent
-from sub_agents.routine_builder import routine_builder_agent
-from sub_agents.ingredient_checker import ingredient_checker_agent
-from sub_agents.progress_tracker import progress_tracker_agent
-from sub_agents.qa_agent import qa_agent
+from google.adk.tools.agent_tool import AgentTool
+from google.adk.tools.preload_memory_tool import PreloadMemoryTool
+from google.adk.planners import BuiltInPlanner
+from google.genai import types
 
 root_agent = Agent(
     name="skincare_advisor",
-    model="gemini-2.5-flash-preview-native-audio",
-    description="AI Skincare Advisor - Root Orchestrator",
-    instruction="""You are a friendly, knowledgeable skincare
-    advisor. Route user requests to the appropriate specialist:
-    - Skin concerns/analysis -> skin_analyzer
-    - Routine questions -> routine_builder
-    - Product/ingredient questions -> ingredient_checker
-    - Progress check -> progress_tracker
-    - General skincare Q&A -> qa_agent
-    IMPORTANT: You are NOT a dermatologist.""",
-    sub_agents=[
-        skin_analyzer_agent,
-        routine_builder_agent,
-        ingredient_checker_agent,
-        progress_tracker_agent,
-        qa_agent,
+    model="gemini-live-2.5-flash-native-audio",
+    description="AI Skincare Advisor — Root Orchestrator",
+    instruction=_ROOT_INSTRUCTION,  # Loaded from prompts/root_orchestrator.txt
+    planner=BuiltInPlanner(
+        thinking_config=types.ThinkingConfig(thinking_budget=1024)
+    ),
+    generate_content_config=types.GenerateContentConfig(
+        safety_settings=[...],  # BLOCK_MEDIUM_AND_ABOVE for all categories
+    ),
+    tools=[
+        PreloadMemoryTool(),
+        AgentTool(agent=skin_analyzer_agent),
+        AgentTool(agent=routine_builder_agent),
+        AgentTool(agent=ingredient_checker_agent),
+        AgentTool(agent=ingredient_interaction_agent),
+        AgentTool(agent=skin_condition_agent),
+        AgentTool(agent=qa_agent),
+        AgentTool(agent=kol_content_agent),
+        AgentTool(agent=progress_tracker_agent),
+        # Composite workflow agents
+        AgentTool(agent=parallel_ingredient_agent),
+        AgentTool(agent=consultation_pipeline_agent),
+        AgentTool(agent=routine_review_agent),
     ],
+    before_model_callback=_safety_guardrail,
+    after_model_callback=_output_safety_check,
+    after_agent_callback=generate_memories_callback,
 )
 ```
 
-### 3.3 Specialized Sub-Agents
+### 3.3 Specialist Sub-Agents
 
 #### 3.3.1 Skin Analyzer Agent
 
-Analyzes skin conditions from video/image input and user descriptions. This is the primary agent for real-time video consultation, leveraging Gemini's multimodal capabilities.
+Analyzes skin conditions from video/image input and user descriptions. Uses Gemini Vision capabilities.
 
 | Property | Details |
 |---|---|
 | Name | `skin_analyzer` |
-| Model | `gemini-2.5-flash-preview-native-audio` |
-| Input | Video stream, images, audio descriptions |
+| Model | `gemini-2.5-flash` |
+| Input | Video frames, images, text descriptions |
 | Output | Skin condition observations, concern identification, severity assessment |
-| Tools | `save_skin_analysis` (Firestore), `capture_snapshot` (Cloud Storage), `google_search` |
-
-**Key Capabilities:**
-
-- Analyze visible skin conditions from real-time video feed (texture, redness, dryness, acne, hyperpigmentation)
-- Cross-reference visual observations with user's verbal description of concerns
-- Provide immediate observations with appropriate confidence levels
-- Save analysis results and snapshots to user's skin history
-- Flag potentially serious conditions that warrant dermatologist consultation
-
-```python
-skin_analyzer_agent = Agent(
-    name="skin_analyzer",
-    model="gemini-2.5-flash-preview-native-audio",
-    description="Analyzes skin from video/images and identifies concerns",
-    instruction="""You are a skin analysis specialist. When the user
-    shows their skin via camera:
-    1. Observe visible conditions (texture, tone, spots, redness)
-    2. Ask clarifying questions about skin type and history
-    3. Provide observations (NOT diagnoses)
-    4. Rate concern severity: mild / moderate / consult-dermatologist
-    5. Save the analysis for progress tracking
-    Always be encouraging and body-positive.""",
-    tools=[save_skin_analysis, capture_snapshot, google_search],
-)
-```
+| Tools | `save_analysis_to_state` (persists to session state) |
+| Output Key | `skin_analysis_result` |
 
 #### 3.3.2 Routine Builder Agent
 
-Creates personalized morning and evening skincare routines based on the user's skin type, concerns, budget, and environment.
+Creates personalized morning and evening skincare routines grounded in routine template data.
 
 | Property | Details |
 |---|---|
 | Name | `routine_builder` |
 | Model | `gemini-2.5-flash` |
-| Input | User skin profile, concerns, budget, climate |
+| Input | User skin concerns, preferences, environment |
 | Output | Structured AM/PM routines with product suggestions and application order |
-| Tools | `get_user_profile` (Firestore), `search_products` (RAG), `save_routine` (Firestore), `google_search` |
-
-**Key Capabilities:**
-
-- Generate step-by-step morning and evening routines
-- Recommend products based on skin type, concerns, and budget range
-- Explain the correct order of product application (e.g., thinnest to thickest)
-- Adjust routines based on seasonal/climate changes
-- Cross-check with ingredient_checker to avoid conflicts
-
-```python
-routine_builder_agent = Agent(
-    name="routine_builder",
-    model="gemini-2.5-flash",
-    description="Builds personalized skincare routines",
-    instruction="""You are a skincare routine specialist. Build
-    routines following these principles:
-    1. Always start with cleanser, end with SPF (AM)
-    2. Layer products thin-to-thick consistency
-    3. Separate actives that conflict (retinol + AHA/BHA)
-    4. Consider the user's budget and availability
-    5. Explain WHY each step matters""",
-    tools=[get_user_profile, search_products, save_routine, google_search],
-)
-```
+| Tools | `VertexAiSearchTool` (routine-templates datastore) |
+| Output Key | `current_routine` |
 
 #### 3.3.3 Ingredient Checker Agent
 
-Analyzes product ingredients for safety, efficacy, and compatibility. Can process product label images or text-based ingredient lists.
+Analyzes product ingredients for safety, efficacy, and suitability using grounded ingredient data.
 
 | Property | Details |
 |---|---|
 | Name | `ingredient_checker` |
 | Model | `gemini-2.5-flash` |
-| Input | Product label images, ingredient list text, current routine |
-| Output | Ingredient analysis, compatibility report, conflict warnings |
-| Tools | `lookup_ingredient` (RAG), `check_compatibility` (custom), `get_user_routine` (Firestore), `google_search` |
+| Input | Product names, ingredient lists |
+| Output | Ingredient safety analysis, suitability assessment |
+| Tools | `VertexAiSearchTool` (skincare-ingredients datastore) |
 
-**Key Capabilities:**
+#### 3.3.4 Ingredient Interaction Agent
 
-- Parse ingredient lists from product label images using Gemini vision
-- Identify key active ingredients and their functions
-- Detect ingredient conflicts (e.g., retinol + vitamin C, niacinamide + AHA)
-- Flag potential allergens based on user's profile
-- Rate product suitability for the user's specific skin type and concerns
-
-#### 3.3.4 Progress Tracker Agent
-
-Tracks skin condition changes over time by comparing periodic photos and analysis results. Provides insights on what's working and what needs adjustment.
+Checks ingredient compatibility and identifies potential conflicts between active ingredients.
 
 | Property | Details |
 |---|---|
-| Name | `progress_tracker` |
+| Name | `ingredient_interaction` |
 | Model | `gemini-2.5-flash` |
-| Input | Current skin photo/video, historical analysis data |
-| Output | Progress reports, trend analysis, routine adjustment suggestions |
-| Tools | `get_skin_history` (Firestore), `compare_snapshots` (custom), `save_progress_note` (Firestore) |
+| Input | Multiple ingredients or products to check |
+| Output | Compatibility report, conflict warnings, safe combinations |
+| Tools | `VertexAiSearchTool` (ingredient-interactions BigQuery datastore) |
 
-**Key Capabilities:**
+#### 3.3.5 Skin Condition Agent
 
-- Compare current skin condition against historical baselines
-- Generate visual progress timelines from stored snapshots
-- Identify trends: improving, stable, or worsening conditions
-- Correlate routine changes with skin condition changes
-- Suggest routine adjustments based on observed progress
+Provides information about skin conditions, symptoms, triggers, and recommended care approaches.
 
-#### 3.3.5 General Q&A Agent
+| Property | Details |
+|---|---|
+| Name | `skin_condition` |
+| Model | `gemini-2.5-flash` |
+| Input | Condition names, symptoms described by user |
+| Output | Condition information, triggers, care guidelines |
+| Tools | `VertexAiSearchTool` (skin-conditions datastore) |
 
-Handles general skincare education questions, myth-busting, and knowledge sharing. Uses RAG to ground answers in verified dermatological sources.
+#### 3.3.6 General Q&A Agent
+
+Handles general skincare education questions, grounded in dermatological knowledge.
 
 | Property | Details |
 |---|---|
 | Name | `qa_agent` |
 | Model | `gemini-2.5-flash` |
 | Input | Text or voice questions about skincare topics |
-| Output | Evidence-based answers with source references |
-| Tools | `skincare_knowledge_search` (Vertex AI RAG), `google_search` |
+| Output | Evidence-based answers with grounded references |
+| Tools | `VertexAiSearchTool` (skincare-ingredients datastore) |
 
-**Key Capabilities:**
+#### 3.3.7 KOL Content Agent
 
-- Answer common skincare questions with evidence-based information
-- Debunk skincare myths and misconceptions
-- Explain how specific ingredients work on the skin
-- Provide general dermatological education (not diagnoses)
-- Reference trusted sources (dermatological studies, expert guidelines)
+Finds relevant Key Opinion Leader (KOL) and influencer skincare video content matching user concerns.
 
-### 3.4 Agent Communication & State Management
+| Property | Details |
+|---|---|
+| Name | `kol_content_agent` |
+| Model | `gemini-2.5-flash` |
+| Input | User's skin concerns and topics of interest |
+| Output | Relevant KOL video URLs and content recommendations |
+| Tools | `VertexAiSearchTool` (kol-content Google Sheets datastore) |
 
-Agents communicate through ADK's shared session state stored in Firestore. Each agent can read and write to session state keys relevant to its function:
+#### 3.3.8 Progress Tracker Agent
 
-| State Key | Type | Description | Written By |
-|---|---|---|---|
-| `user_profile` | Object | Skin type, concerns, allergies, preferences | Root Orchestrator |
-| `current_routine` | Object | Active AM/PM skincare routine | Routine Builder |
-| `latest_analysis` | Object | Most recent skin analysis results | Skin Analyzer |
-| `skin_history` | Array | Historical analysis snapshots with timestamps | Progress Tracker |
-| `ingredient_alerts` | Array | Active ingredient conflict warnings | Ingredient Checker |
-| `conversation_context` | Object | Summary of current consultation goals | Root Orchestrator |
+Tracks skin condition changes over time by recording and comparing observations.
 
-### 3.5 Agent Routing Logic
+| Property | Details |
+|---|---|
+| Name | `progress_tracker` |
+| Model | `gemini-2.5-flash` |
+| Input | Current skin observations, historical data |
+| Output | Progress reports, trend analysis |
+| Tools | `save_progress_note`, `get_progress_notes` (session state) |
 
-The Root Orchestrator uses LLM-driven dynamic routing. Based on the user's input, Gemini decides which sub-agent to transfer to:
+### 3.4 Workflow (Composite) Agents
+
+ADK enables powerful composite agent patterns. The system uses three workflow agents that combine specialist agents into coordinated pipelines:
+
+#### 3.4.1 Parallel Ingredient Check Agent
+
+Runs ingredient safety and interaction checks **concurrently**, then synthesizes results.
+
+```
+SequentialAgent [
+    ParallelAgent [
+        ingredient_checker ‖ ingredient_interaction
+    ],
+    IngredientSynthesisAgent (merges results from state)
+]
+```
+
+**Use when:** The user asks about an ingredient's safety AND its compatibility simultaneously.
+
+#### 3.4.2 Full Consultation Pipeline Agent
+
+Chains specialist agents in a fixed order where each step builds on the previous one's output via session state.
+
+```
+SequentialAgent [
+    skin_analyzer       → state: skin_analysis_result
+    skin_condition      → state: skin_condition_result
+    routine_builder     → state: current_routine
+    consultation_synth  → state: consultation_summary
+    kol_content_agent   → finds relevant videos
+]
+```
+
+**Use when:** The user requests a comprehensive consultation or says "analyze everything."
+
+#### 3.4.3 Routine Review Loop Agent
+
+Iteratively reviews and refines skincare routines before they reach the user using a critic/refiner loop.
+
+```
+SequentialAgent [
+    routine_builder (→ state: current_routine),
+    LoopAgent (max 3 iterations) [
+        RoutineCriticAgent  (→ state: routine_criticism)
+        RoutineRefinerAgent (updates routine or calls exit_loop)
+    ]
+]
+```
+
+**Use when:** Safety is important (sensitive skin, acne-prone skin, complex multi-step routines).
+
+### 3.5 Agent Factory Pattern
+
+To satisfy ADK's single-parent rule (each agent instance can only belong to one workflow parent), the system uses **factory functions** in `agent_factories.py` to create fresh instances with the same configuration but unique names:
+
+```python
+def create_ingredient_checker(name="ingredient_checker", **overrides) -> Agent:
+    return Agent(
+        name=name,
+        model="gemini-2.5-flash",
+        instruction=_load_prompt("ingredient_checker.txt"),
+        tools=[VertexAiSearchTool(data_store_id=DATASTORES["ingredients"], ...)],
+        **overrides,
+    )
+```
+
+### 3.6 Agent Routing Logic
+
+The Root Orchestrator uses the BuiltInPlanner's thinking capability to decide which AgentTool to invoke:
 
 | User Input Example | Routed To | Reasoning |
 |---|---|---|
 | "Look at my skin, what do you see?" | Skin Analyzer | Video/image analysis request |
 | "Build me a morning routine for oily skin" | Routine Builder | Routine creation request |
-| "Is this moisturizer safe to use with retinol?" | Ingredient Checker | Product compatibility query |
-| "How has my skin changed since last month?" | Progress Tracker | Progress comparison request |
-| "What does hyaluronic acid do?" | Q&A Agent | General skincare knowledge question |
-| "Hi, I need help with my acne" | Root (then Skin Analyzer) | General greeting, then specific concern |
+| "Is this moisturizer safe?" | Ingredient Checker | Single product safety query |
+| "Can I use retinol with vitamin C?" | Ingredient Interaction | Ingredient compatibility query |
+| "What is rosacea? What causes it?" | Skin Condition | Condition information request |
+| "What does hyaluronic acid do?" | Q&A Agent | General skincare knowledge |
+| "Show me skincare videos about acne" | KOL Content Agent | Content recommendation request |
+| "How has my skin changed?" | Progress Tracker | Progress comparison request |
+| "Check this product's safety AND interactions" | Parallel Ingredient Agent | Combined safety + interaction check |
+| "Give me a full consultation" | Consultation Pipeline | End-to-end consultation pipeline |
+| "Build me a safe routine for sensitive skin" | Routine Review Agent | Routine with safety validation loop |
 
 ---
 
 ## 4. Tools & Integrations
 
-Each agent has access to specific tools that enable it to interact with external services and databases. Tools in ADK are Python functions decorated with metadata that the LLM uses to decide when and how to call them.
+### 4.1 Vertex AI Search Datastores
 
-### 4.1 Custom Tools
+The system uses 5 Vertex AI Search datastores for grounded knowledge retrieval:
 
-| Tool Name | Used By | Function | Backend Service |
+| Datastore | Content | Data Source | Agents Using It |
 |---|---|---|---|
-| `save_skin_analysis` | Skin Analyzer | Persists skin analysis results to user profile | Cloud Firestore |
-| `capture_snapshot` | Skin Analyzer | Saves a skin photo with metadata for tracking | Cloud Storage + Firestore |
-| `get_user_profile` | Routine Builder, Root | Retrieves user skin type, concerns, allergies | Cloud Firestore |
-| `search_products` | Routine Builder | Searches product knowledge base by criteria | Vertex AI RAG Engine |
-| `save_routine` | Routine Builder | Saves a generated routine to user profile | Cloud Firestore |
-| `lookup_ingredient` | Ingredient Checker | Looks up ingredient details and safety data | Vertex AI RAG Engine |
-| `check_compatibility` | Ingredient Checker | Checks if ingredients can be used together | Custom logic + RAG |
-| `get_user_routine` | Ingredient Checker | Retrieves current routine for conflict checking | Cloud Firestore |
-| `get_skin_history` | Progress Tracker | Retrieves historical skin analyses and photos | Cloud Firestore |
-| `compare_snapshots` | Progress Tracker | Compares two skin snapshots for changes | Gemini Vision + custom |
-| `save_progress_note` | Progress Tracker | Records a progress observation with date | Cloud Firestore |
-| `skincare_knowledge_search` | Q&A Agent | RAG search over dermatological knowledge base | Vertex AI RAG Engine |
+| `skincare-ingredients` | 3,000+ skincare ingredients with safety/efficacy data | Structured data | Ingredient Checker, Q&A Agent |
+| `test-first-bigquery-table` | Ingredient interaction and compatibility data | BigQuery table | Ingredient Interaction Agent |
+| `skin-conditions` | Common conditions: symptoms, triggers, care guidelines | Structured data | Skin Condition Agent |
+| `routine-templates` | Evidence-based routine templates by skin type/concern | Structured data | Routine Builder Agent |
+| `kol-content` | KOL/influencer skincare video content catalog | Google Sheets | KOL Content Agent |
 
-### 4.2 Built-in ADK Tools
+### 4.2 Custom Tools (FunctionTools)
 
-- **Google Search Tool** — Real-time web search for product information, latest skincare research, and ingredient data
-- **Code Execution Tool** — Available for data analysis tasks (e.g., computing ingredient concentration percentages)
+| Tool Name | Used By | Function | Storage |
+|---|---|---|---|
+| `save_analysis_to_state` | Skin Analyzer | Persists skin analysis results to session state | Session State |
+| `save_progress_note` | Progress Tracker | Records a progress observation with date | Session State |
+| `get_progress_notes` | Progress Tracker | Retrieves historical progress notes | Session State |
+| `exit_loop` | Routine Refiner | Signals the LoopAgent to stop iterating | ToolContext (escalate) |
 
-### 4.3 Example Tool Implementation
+### 4.3 Built-in ADK Tools
 
-```python
-from google.cloud import firestore
+- **PreloadMemoryTool** — Retrieves user memories from Vertex AI Memory Bank at the start of every turn, enabling cross-session personalization
+- **VertexAiSearchTool** — Grounded knowledge retrieval from Vertex AI Search datastores (used by 5 specialist agents)
+- **AgentTool** — Wraps sub-agents as callable tools that execute via `run_async()` in isolated contexts
 
-db = firestore.AsyncClient()
+### 4.4 ADK Callbacks
 
-async def save_skin_analysis(
-    user_id: str,
-    concerns: list[str],
-    severity: str,
-    observations: str,
-    recommendations: list[str]
-) -> dict:
-    """Saves a skin analysis result to the user's profile.
-
-    Args:
-        user_id: The authenticated user's ID.
-        concerns: List of identified skin concerns.
-        severity: Overall severity (mild/moderate/severe).
-        observations: Detailed text observations.
-        recommendations: List of recommended actions.
-
-    Returns:
-        dict: Confirmation with analysis ID.
-    """
-    from datetime import datetime
-
-    analysis = {
-        "concerns": concerns,
-        "severity": severity,
-        "observations": observations,
-        "recommendations": recommendations,
-        "timestamp": datetime.utcnow(),
-    }
-
-    ref = db.collection("users").document(user_id)
-    ref_analysis = ref.collection("skin_analyses")
-    doc_ref = await ref_analysis.add(analysis)
-
-    return {"status": "saved", "analysis_id": doc_ref.id}
-```
+| Callback | Type | Function |
+|---|---|---|
+| `_safety_guardrail` | `before_model_callback` | Model Armor prompt sanitization + medical request blocking |
+| `_output_safety_check` | `after_model_callback` | Model Armor response screening + medical language flagging |
+| `generate_memories_callback` | `after_agent_callback` | Sends recent events to Memory Bank for memory extraction |
 
 ---
 
 ## 5. Knowledge Base & RAG Architecture
 
-The skincare advisor's accuracy depends on a well-curated knowledge base accessed through Retrieval-Augmented Generation (RAG). This ensures all recommendations are grounded in verified dermatological information rather than relying solely on the LLM's training data.
+The skincare advisor's accuracy depends on grounded knowledge retrieval through Vertex AI Search datastores. This ensures all recommendations are evidence-based rather than relying solely on the LLM's training data.
 
 ### 5.1 Knowledge Base Structure
 
-| Collection | Content | Source | Update Frequency |
+| Datastore | Content | Update Mechanism |
+|---|---|---|
+| Ingredients | 3,000+ skincare ingredients with safety/efficacy data | Vertex AI Search ingestion |
+| Ingredient Interactions | Known conflicts and synergies between active ingredients | BigQuery table → Vertex AI Search |
+| Skin Conditions | Common conditions: symptoms, triggers, care guidelines | Vertex AI Search ingestion |
+| Routine Templates | Evidence-based routine templates by skin type and concern | Vertex AI Search ingestion |
+| KOL Content | Curated KOL/influencer skincare video content | Google Sheets → Vertex AI Search connector |
+
+### 5.2 Retrieval Pipeline
+
+```
+User Query (via AgentTool → sub-agent)
+        │
+        ▼
+VertexAiSearchTool(data_store_id=..., bypass_multi_tools_limit=True)
+  - Automatic query formation from agent context
+  - Semantic search over datastore
+        │
+        ▼
+Gemini 2.5 Flash (sub-agent)
+  - Receives retrieved documents as context
+  - Generates grounded response
+  - Returns text result to root agent via AgentTool
+        │
+        ▼
+Root Agent (gemini-live-2.5-flash-native-audio)
+  - Speaks the response to the user in real-time
+```
+
+---
+
+## 6. Security & Safety — Defense in Depth
+
+> **CRITICAL:** Skin photos and health-related data are sensitive personal information. The system implements 5 layers of security.
+
+### 6.1 Layer 1: Google Cloud Model Armor
+
+ML-powered prompt and response sanitization using the Model Armor Python SDK:
+
+| Filter | Detection |
+|---|---|
+| Responsible AI (RAI) | Hate speech, harassment, sexually explicit, dangerous content |
+| Prompt Injection & Jailbreak | Attempts to override system instructions or extract prompts |
+| Sensitive Data Protection (PII/SDP) | Credit cards, SSN, API keys, passwords, phone numbers |
+| Malicious URI Detection | URLs linked to phishing, malware, or other threats |
+| CSAM | Always-on child safety protection |
+
+**Fail-open design:** If Model Armor is unavailable, requests pass through with a warning log — never silently blocking all users.
+
+```python
+from google.cloud import modelarmor_v1
+
+# Prompt sanitization
+result = model_armor.sanitize_prompt(user_text)
+if result.is_blocked:
+    return tailored_response(result.blocked_reason)
+
+# Response sanitization
+result = model_armor.sanitize_response(response_text)
+if result.is_blocked:
+    return safe_rephrased_response()
+```
+
+### 6.2 Layer 2: ADK before_model_callback
+
+Domain-specific medical request blocking that Model Armor doesn't cover:
+
+- Blocks explicit prescription/diagnosis requests (12 patterns)
+- Returns friendly redirect to dermatologist consultation
+- Custom to skincare domain boundaries
+
+### 6.3 Layer 3: ADK after_model_callback
+
+Output screening for medical language in model responses:
+- Model Armor response screening
+- Flags medical-sounding language (logging only for monitoring)
+- "I diagnose," "prescription for," etc.
+
+### 6.4 Layer 4: Gemini Built-in Safety Filters
+
+Configured in `generate_content_config` with `BLOCK_MEDIUM_AND_ABOVE` threshold for:
+- Dangerous content
+- Harassment
+- Hate speech
+- Sexually explicit content
+
+### 6.5 Layer 5: System Prompt Guardrails
+
+Root orchestrator prompt includes:
+- Explicit persona boundary: "You are NOT a dermatologist"
+- Body-positive language requirements
+- Severity-based dermatologist referral thresholds
+- No storage of raw video streams
+
+### 6.6 Authentication & Data Protection
+
+- Firebase Authentication for user identity (Google Sign-In, email/password)
+- JWT token validation on every WebSocket connection
+- CORS restricted to allowed origins only
+- Rate limiting: 30 text messages per 60-second window per session
+- Non-root container user in production Docker image
+- API keys stored in Secret Manager
+
+---
+
+## 7. Observability — BigQuery Agent Analytics
+
+### 7.1 BigQuery Agent Analytics Plugin
+
+The system uses ADK's BigQuery Agent Analytics Plugin for comprehensive observability:
+
+```python
+from google.adk.plugins.bigquery_agent_analytics_plugin import (
+    BigQueryAgentAnalyticsPlugin,
+    BigQueryLoggerConfig,
+)
+
+bq_plugin = BigQueryAgentAnalyticsPlugin(
+    project_id=_PROJECT_ID,
+    dataset_id="adk_agent_logs",
+    table_id="agent_events_ai_skincare_advisor",
+    config=BigQueryLoggerConfig(
+        enabled=True,
+        gcs_bucket_name=os.environ.get("GCS_BUCKET_NAME"),
+        log_multi_modal_content=True,
+        max_content_length=500 * 1024,  # 500 KB
+        batch_size=1,                   # Low latency
+    ),
+)
+```
+
+### 7.2 What Gets Logged
+
+All agent events are automatically captured in BigQuery:
+
+- **Agent Execution Events** — which agent handled each request
+- **LLM Call Events** — prompts, completions, token counts, latency
+- **Tool Invocation Events** — input parameters, output, duration, success/failure
+- **Multimodal Content** — audio/image data stored in GCS, referenced from BigQuery
+- **Session Events** — session creation, state updates
+
+### 7.3 BigQuery Analytics Views
+
+Custom SQL views provide operational dashboards (defined in `docs/bigquery_analytics_views.sql`):
+
+- Agent usage distribution
+- Tool call success rates
+- Response latency percentiles
+- Session completion patterns
+- Error rate monitoring
+
+### 7.4 Structured Logging
+
+JSON-structured logging with rotating file handler:
+- Console handler: INFO level
+- File handler: 5MB max, 3 backup files (`logs/server.log`)
+- Noisy ADK module suppression (audio cache, protocol, connection)
+
+---
+
+## 8. Cross-Session Memory — Vertex AI Memory Bank
+
+### 8.1 Architecture
+
+The system uses Vertex AI Memory Bank for persistent, cross-session user memories:
+
+- **PreloadMemoryTool** — Retrieves relevant memories at the start of every turn
+- **after_agent_callback** — Sends recent events to Memory Bank after each turn
+
+### 8.2 Memory Extraction
+
+```python
+async def generate_memories_callback(callback_context: CallbackContext):
+    """Sends recent events to Memory Bank for memory extraction."""
+    recent_events = callback_context.session.events[-5:-1]
+    if recent_events:
+        await callback_context.add_events_to_memory(events=recent_events)
+```
+
+The Memory Bank LLM automatically:
+- Extracts meaningful info (skin type, preferences, concerns, routines)
+- Consolidates with existing memories (update, not duplicate)
+- Ignores non-informative turns
+
+### 8.3 Dual-Mode Services
+
+| Mode | Session Service | Memory Service | Trigger |
 |---|---|---|---|
-| Ingredients | 3,000+ skincare ingredients with safety/efficacy data | CIR, EWG, PubChem databases | Monthly |
-| Ingredient Interactions | Known conflicts and synergies between active ingredients | Dermatological literature | Monthly |
-| Skin Conditions | Common conditions: symptoms, triggers, care guidelines | AAD, BAD clinical guides | Quarterly |
-| Product Database | Popular products with full ingredient lists and reviews | Web scraping + manual curation | Weekly |
-| Routine Templates | Evidence-based routine templates by skin type and concern | Dermatologist consultations | Quarterly |
-| Skincare Education | Myths, FAQs, educational content for consumer understanding | Peer-reviewed articles | Monthly |
+| Local Dev | `InMemorySessionService` | `InMemoryMemoryService` | `AGENT_ENGINE_ID` not set |
+| Production | `VertexAiSessionService` | `VertexAiMemoryBankService` | `AGENT_ENGINE_ID` set |
 
-### 5.2 RAG Pipeline
-
-The RAG pipeline uses Vertex AI RAG Engine for document ingestion and retrieval, with Vertex AI Vector Search for semantic similarity:
-
-```
-Knowledge Documents (PDFs, structured data)
-        │
-        ▼
-Vertex AI RAG Engine (Ingestion)
-  - Chunking (512 tokens, 100 overlap)
-  - Embedding (text-embedding-005)
-        │
-        ▼
-Vertex AI Vector Search (Index)
-  - Approximate Nearest Neighbor (ANN)
-  - Cosine similarity
-        │
-        ▼
-Agent Tool Call (query)
-  - Top-k retrieval (k=5)
-  - Context injection into agent prompt
-  - Gemini generates grounded response
-```
+**Note:** Live streaming sessions always use `InMemorySessionService` because `VertexAiSessionService`'s events API is incompatible with `run_live()`.
 
 ---
 
-## 6. LLM Observability & Evaluation
+## 9. Push Notifications — Firebase Cloud Messaging
 
-Observability is critical for an AI skincare advisor where recommendation quality directly impacts user trust and safety. The system uses OpenTelemetry-based tracing integrated with Google Cloud Observability.
+### 9.1 Notification Types
 
-### 6.1 Observability Stack
-
-| Component | Google Service | Purpose |
+| Type | Trigger | Content |
 |---|---|---|
-| Trace Collection | Cloud Trace (via OTel) | Capture every agent run, tool call, and LLM interaction |
-| Logging | Cloud Logging | Structured logs for agent decisions, errors, and warnings |
-| Metrics | Cloud Monitoring | Token usage, latency, error rates, throughput dashboards |
-| LLM Evaluation | Vertex AI Evaluation | Automated quality assessment of agent responses |
-| Advanced Analysis | Phoenix (self-hosted on Cloud Run) | Prompt optimization, trace replay, evaluation experiments |
+| Routine Reminder | Scheduled (morning/evening) | "Time to start your morning skincare routine!" |
+| Follow-up Nudge | Time since last consultation | "How's your skin doing? Want to check in?" |
+| Progress Milestone | 3, 5, 10, 25 check-ins | "🏆 10 Check-ins! Incredible dedication!" |
+| Product Discount | Personalized to skin concerns | Matched from product catalog with buy_url |
 
-### 6.2 What Gets Traced
+### 9.2 Product Catalog
 
-ADK's built-in OpenTelemetry integration automatically captures the following spans for every interaction:
+The `server/product_catalog.py` module provides a curated product catalog matched to user skin concerns, enabling personalized deal notifications with direct e-commerce purchase links.
 
-- **Agent Execution Spans** — start/end of each agent's processing, including which agent handled the request
-- **LLM Call Spans** — every call to Gemini, including prompt, completion, token counts, and latency
-- **Tool Invocation Spans** — each tool call with input parameters, output, duration, and success/failure
-- **Agent Transfer Spans** — when the Root Orchestrator routes to a sub-agent, capturing the routing decision
-- **Session Events** — session creation, state updates, and session resumption after WebSocket reconnects
+### 9.3 API Endpoints
 
-### 6.3 Key Metrics & Dashboards
-
-| Metric | Description | Alert Threshold |
+| Endpoint | Method | Purpose |
 |---|---|---|
-| Agent Response Latency (p95) | Time from user input to first agent response token | > 3 seconds |
-| Tool Call Success Rate | Percentage of tool calls that return without error | < 95% |
-| Token Usage per Session | Average tokens consumed per consultation session | > 50,000 tokens |
-| Agent Routing Accuracy | Percentage of correct sub-agent selections (via eval) | < 90% |
-| Recommendation Safety Score | LLM-as-judge evaluation of safety compliance | < 0.95 |
-| Hallucination Rate | Percentage of responses containing ungrounded claims | > 5% |
-| Session Completion Rate | Percentage of sessions where user received a complete recommendation | < 80% |
-
-### 6.4 Enabling Observability
-
-ADK natively supports exporting telemetry to Google Cloud with a single CLI flag:
-
-```bash
-# Development: local traces
-adk web
-
-# Production: export to Google Cloud Observability
-adk web --otel_to_cloud
-
-# Required environment variables
-export GOOGLE_CLOUD_PROJECT="skincare-advisor-prod"
-export GOOGLE_CLOUD_LOCATION="us-central1"
-```
+| `/api/register-token` | POST | Register FCM device token |
+| `/api/send-notification` | POST | Send push notification to user |
+| `/api/trigger-reminders` | POST | Trigger routine reminders + product deals for all users |
 
 ---
 
-## 7. Project Structure
+## 10. Flutter Mobile App — "Glow"
+
+### 10.1 App Architecture
+
+The Flutter app provides a native iOS/Android experience for real-time skincare consultation:
+
+| Screen | File | Purpose |
+|---|---|---|
+| Login | `login_screen.dart` | Firebase Auth (Google Sign-In, email/password) |
+| Home | `home_screen.dart` | Dashboard with consultation history |
+| Main | `main_screen.dart` | Navigation and app shell |
+| Consultation Lobby | `consultation_lobby_screen.dart` | Pre-consultation setup |
+| Consultation | `consultation_screen.dart` | Real-time voice/video consultation |
+| Chat | `chat_screen.dart` | Text-based chat interface |
+
+### 10.2 Services
+
+| Service | File | Purpose |
+|---|---|---|
+| Audio | `audio_service.dart` | PCM audio capture and playback |
+| Camera | `camera_service.dart` | Camera capture for skin analysis |
+| WebSocket | `websocket_service.dart` | Bidi-streaming connection to backend |
+| Auth | `auth_service.dart` | Firebase Auth state management |
+| Chat History | `chat_history_service.dart` | Session history retrieval |
+| Notifications | `notification_service.dart` | FCM push notification handling |
+
+### 10.3 Key Features
+
+- Real-time voice conversation with native audio streaming
+- Camera integration for live skin analysis
+- Tool event display (shows "Analyzing ingredients..." during agent processing)
+- Transcription display (input and output transcription)
+- Push notification support for routine reminders and product deals
+- Custom theme with dark mode support
+
+---
+
+## 11. Project Structure
 
 ```
-skincare-advisor/
+AI_Skincare_Advisor/
 ├── app/
-│   ├── .env                          # API keys & config
+│   ├── .env                                # API keys & config
 │   └── skincare_advisor/
-│       ├── __init__.py               # Package init (imports root_agent)
-│       ├── agent.py                  # Root Orchestrator Agent
+│       ├── __init__.py                     # Package init (imports root_agent)
+│       ├── agent.py                        # Root Orchestrator Agent
+│       ├── model_armor.py                  # Model Armor SDK integration
+│       ├── callbacks/
+│       │   ├── __init__.py
+│       │   └── memory_callbacks.py         # Memory Bank after_agent_callback
 │       ├── sub_agents/
 │       │   ├── __init__.py
-│       │   ├── skin_analyzer.py      # Skin Analyzer Agent
-│       │   ├── routine_builder.py    # Routine Builder Agent
-│       │   ├── ingredient_checker.py # Ingredient Checker Agent
-│       │   ├── progress_tracker.py   # Progress Tracker Agent
-│       │   └── qa_agent.py           # General Q&A Agent
+│       │   ├── agent_factories.py          # DRY agent creation (single-parent rule)
+│       │   ├── skin_analyzer.py            # Skin Analyzer Agent
+│       │   ├── routine_builder.py          # Routine Builder Agent
+│       │   ├── ingredient_checker.py       # Ingredient Checker Agent
+│       │   ├── ingredient_interaction.py   # Ingredient Interaction Agent
+│       │   ├── skin_condition.py           # Skin Condition Agent
+│       │   ├── qa_agent.py                 # General Q&A Agent
+│       │   ├── kol_content.py              # KOL Content Agent
+│       │   ├── progress_tracker.py         # Progress Tracker Agent
+│       │   ├── parallel_ingredient_check.py # ParallelAgent workflow
+│       │   ├── consultation_pipeline.py    # SequentialAgent pipeline
+│       │   └── routine_review_loop.py      # LoopAgent review workflow
 │       ├── tools/
 │       │   ├── __init__.py
-│       │   ├── skin_tools.py         # save_skin_analysis, capture_snapshot
-│       │   ├── routine_tools.py      # search_products, save_routine
-│       │   ├── ingredient_tools.py   # lookup_ingredient, check_compatibility
-│       │   ├── progress_tools.py     # get_skin_history, compare_snapshots
-│       │   ├── user_tools.py         # get_user_profile, update_profile
-│       │   └── knowledge_tools.py    # skincare_knowledge_search (RAG)
-│       └── prompts/
-│           ├── root_orchestrator.txt  # System prompt for Root Agent
-│           ├── skin_analyzer.txt      # System prompt for Skin Analyzer
-│           ├── routine_builder.txt    # System prompt for Routine Builder
-│           ├── ingredient_checker.txt # System prompt for Ingredient Checker
-│           ├── progress_tracker.txt   # System prompt for Progress Tracker
-│           └── qa_agent.txt           # System prompt for Q&A Agent
+│       │   ├── skin_tools.py              # save_analysis_to_state
+│       │   └── progress_tools.py          # save_progress_note, get_progress_notes
+│       ├── prompts/                        # 13 system prompts (one per agent)
+│       │   ├── root_orchestrator.txt
+│       │   ├── skin_analyzer.txt
+│       │   ├── routine_builder.txt
+│       │   ├── ingredient_checker.txt
+│       │   ├── ingredient_interaction.txt
+│       │   ├── skin_condition.txt
+│       │   ├── qa_agent.txt
+│       │   ├── kol_content.txt
+│       │   ├── progress_tracker.txt
+│       │   ├── ingredient_synthesis.txt
+│       │   ├── consultation_synthesis.txt
+│       │   ├── routine_critic.txt
+│       │   └── routine_refiner.txt
+│       └── tests/
+│           └── integration/
 ├── server/
-│   ├── main.py                       # FastAPI + WebSocket server
-│   ├── streaming_service.py          # ADK Bidi-streaming integration
-│   └── auth.py                       # Firebase Auth middleware
-├── knowledge/
-│   ├── ingredients/                  # Ingredient data (CSV/JSON)
-│   ├── conditions/                   # Skin condition guides
-│   ├── routines/                     # Routine templates
-│   └── ingest.py                     # Script to ingest into Vertex AI RAG
+│   ├── main.py                             # FastAPI + WebSocket + ADK Runner
+│   ├── auth.py                             # Firebase Auth JWT verification
+│   ├── model_armor.py                      # Model Armor (server copy)
+│   ├── notifications.py                    # FCM push notification service
+│   └── product_catalog.py                  # Product catalog for deal notifications
 ├── frontend/
-│   ├── flutter_app/                  # Flutter mobile app source
-│   └── angular_web/                  # Angular web app source
-├── infra/
-│   ├── Dockerfile                    # Container for Cloud Run
-│   ├── cloudbuild.yaml               # Cloud Build CI/CD pipeline
-│   ├── terraform/                    # Infrastructure as Code
-│   └── firebase.json                 # Firebase configuration
-├── evals/
-│   ├── test_routing.py               # Agent routing accuracy tests
-│   ├── test_safety.py                # Safety guardrail tests
-│   └── test_quality.py               # Response quality evaluation
-├── requirements.txt
-├── opentelemetry.env                 # OTel config for Cloud Trace
-└── README.md
+│   └── flutter_app/                        # Flutter "Glow" mobile app
+│       └── lib/
+│           ├── main.dart                   # App entry point
+│           ├── router.dart                 # GoRouter navigation
+│           ├── theme.dart                  # Material 3 dark theme
+│           ├── config.dart                 # Backend URL config
+│           ├── firebase_options.dart
+│           ├── screens/                    # 6 screens (login, home, main, lobby, consultation, chat)
+│           └── services/                   # 6 services (audio, camera, websocket, auth, chat, notifications)
+├── scripts/
+│   ├── create_agent_engine.py              # Create Vertex AI Agent Engine instance
+│   ├── create_model_armor_template.py      # Create Model Armor template
+│   ├── deploy-backend.sh                   # Backend deployment script
+│   ├── deploy.py                           # Python deployment orchestrator
+│   ├── setup-gcp.sh                        # GCP project setup
+│   └── test_websocket.py                   # WebSocket connection test
+├── docs/
+│   ├── project_document.md                 # This document
+│   ├── blog_post.md                        # Hackathon blog post
+│   ├── submission_text.md                  # Hackathon submission
+│   ├── frontend_screens.md                 # Frontend documentation
+│   ├── model_armor.md                      # Model Armor documentation
+│   ├── bigquery_analytics_views.sql        # BigQuery dashboard queries
+│   ├── eval_results.txt                    # Agent evaluation results
+│   └── *.png                               # Architecture diagrams
+├── logs/                                    # Rotating server logs
+├── Dockerfile                               # Cloud Run container (Python 3.13-slim)
+├── Dockerfile.flutter                       # Flutter web build container
+├── requirements.txt                         # Python dependencies
+├── .env                                     # Root environment variables
+└── README.md                                # Project README
 ```
 
 ---
 
-## 8. Deployment Architecture
+## 12. Deployment Architecture
 
-### 8.1 Environments
+### 12.1 Environments
 
-| Environment | Platform | ADK Config | Observability |
+| Environment | Platform | Session/Memory Services | Observability |
 |---|---|---|---|
-| Local Dev | adk web (localhost:8000) | `GOOGLE_GENAI_USE_VERTEXAI=FALSE` | Console logging |
-| Staging | Cloud Run (staging) | `GOOGLE_GENAI_USE_VERTEXAI=TRUE` | Cloud Trace (staging project) |
-| Production | Vertex AI Agent Engine / Cloud Run | `GOOGLE_GENAI_USE_VERTEXAI=TRUE` | Cloud Trace + alerts |
+| Local Dev | `python -m server.main` | `InMemorySession/MemoryService` | Console + file logging, BigQuery plugin |
+| Production | Cloud Run + Agent Engine | `VertexAiSession/MemoryBankService` | BigQuery analytics + Cloud Logging |
 
-### 8.2 Cloud Run Deployment
+### 12.2 Cloud Run Deployment
 
 ```dockerfile
 # Dockerfile
-FROM python:3.12-slim
+FROM python:3.13-slim
 WORKDIR /app
 COPY requirements.txt .
-RUN pip install -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+RUN adduser --disabled-password --gecos "" appuser && \
+    chown -R appuser:appuser /app
 COPY . .
-CMD ["uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", "8080"]
+USER appuser
+CMD ["sh", "-c", "uvicorn server.main:web_app --host 0.0.0.0 --port ${PORT:-8080}"]
 ```
 
-```bash
-# Deploy to Cloud Run
-gcloud run deploy skincare-advisor \
-  --source . \
-  --region us-central1 \
-  --allow-unauthenticated \
-  --set-env-vars GOOGLE_GENAI_USE_VERTEXAI=TRUE \
-  --min-instances 1 \
-  --max-instances 10 \
-  --memory 2Gi
+### 12.3 WebSocket Configuration
+
+Production WebSocket settings optimized for long-running tool calls:
+- `ws_ping_interval=30` — Ping every 30s (prevents idle disconnects)
+- `ws_ping_timeout=120` — Wait up to 120s for pong (handles slow tool calls)
+
+### 12.4 Deployment Scripts
+
+| Script | Purpose |
+|---|---|
+| `scripts/deploy-backend.sh` | Build and deploy to Cloud Run |
+| `scripts/deploy.py` | Python deployment orchestrator |
+| `scripts/create_agent_engine.py` | Create Vertex AI Agent Engine instance |
+| `scripts/create_model_armor_template.py` | Create Model Armor template via gcloud |
+| `scripts/setup-gcp.sh` | Initial GCP project setup (APIs, IAM, services) |
+
+### 12.5 Key Environment Variables
+
+| Variable | Purpose | Required |
+|---|---|---|
+| `GOOGLE_CLOUD_PROJECT` | GCP project ID | Yes |
+| `GOOGLE_CLOUD_LOCATION` | Region (default: us-central1) | Yes |
+| `AGENT_ENGINE_ID` | Vertex AI Agent Engine ID (production mode) | Prod only |
+| `MODEL_ARMOR_TEMPLATE_ID` | Model Armor template ID | Optional |
+| `GCS_BUCKET_NAME` | GCS bucket for BigQuery multimodal content | Optional |
+| `BQ_DATASET_ID` | BigQuery dataset (default: adk_agent_logs) | Optional |
+| `ALLOWED_ORIGINS` | CORS allowed origins | Optional |
+| `SKIP_AUTH` | Skip Firebase Auth in local dev | Dev only |
+
+---
+
+## 13. Dependencies
+
+```
+google-adk[eval]==1.23.0
+google-genai==1.60.0
+google-cloud-aiplatform[agent_engine]
+fastapi
+uvicorn[standard]
+python-dotenv
+firebase-admin
+opentelemetry-sdk
+google-cloud-modelarmor
 ```
 
-### 8.3 CI/CD Pipeline
-
-Cloud Build automates testing, building, and deployment:
-
-- Push to main branch triggers Cloud Build pipeline
-- Run unit tests and agent evaluation tests (`evals/`)
-- Build Docker container and push to Artifact Registry
-- Deploy to Cloud Run staging, run integration tests
-- Manual approval gate for production deployment
-- Deploy to production Cloud Run / Vertex AI Agent Engine
-
 ---
 
-## 9. Security & Privacy
-
-> **CRITICAL:** Skin photos and health-related data are sensitive personal information. The system must meet the highest standards of data privacy and security.
-
-### 9.1 Data Protection
-
-- All skin photos encrypted at rest (AES-256) in Cloud Storage
-- Data in transit encrypted with TLS 1.3 across all connections
-- User data isolated with Firestore security rules — users can only access their own data
-- Full data deletion: users can delete all their data at any time, including photos and analysis history
-- No third-party data sharing — user data never leaves Google Cloud infrastructure
-
-### 9.2 Authentication & Authorization
-
-- Firebase Authentication for user identity (Google Sign-In, email/password, phone)
-- JWT token validation on every API request
-- Service-to-service authentication via Google Cloud IAM
-- API keys stored in Secret Manager, never in code or environment files
-
-### 9.3 AI Safety Guardrails
-
-- System prompts include explicit disclaimers: "Not a medical professional, not a diagnosis"
-- Severity thresholds: conditions flagged as severe automatically recommend dermatologist consultation
-- Content filtering: Gemini's built-in safety filters active for all interactions
-- Body-positive language enforced via system prompts — no negative commentary on appearance
-- No storage of raw video streams — only user-approved snapshots are saved
-- Regular evaluation runs to detect and fix hallucination or unsafe recommendations
-
----
-
-## 10. Development Roadmap
-
-| Phase | Timeline | Deliverables | Status |
-|---|---|---|---|
-| Phase 1: Foundation | Weeks 1–4 | ADK setup, Root Agent, Skin Analyzer with Gemini Live API, basic Flutter app | Planned |
-| Phase 2: Multi-Agent | Weeks 5–8 | Routine Builder, Ingredient Checker, Q&A Agent, Firestore integration | Planned |
-| Phase 3: Knowledge | Weeks 9–11 | RAG pipeline, ingredient database, Vertex AI Vector Search, knowledge ingestion | Planned |
-| Phase 4: Progress | Weeks 12–14 | Progress Tracker, photo comparison, historical analysis, dashboards | Planned |
-| Phase 5: Observability | Weeks 15–16 | Cloud Trace integration, evaluation pipeline, safety testing, monitoring alerts | Planned |
-| Phase 6: Production | Weeks 17–20 | Cloud Run deployment, CI/CD, security hardening, beta testing | Planned |
-| Phase 7: Launch | Weeks 21–24 | Public launch, app store submission, user onboarding, feedback loop | Planned |
-
----
-
-*AI Skincare Advisor — Powered by Google ADK & Gemini*
+*Glow — AI Skincare Advisor — Powered by Google ADK & Gemini*

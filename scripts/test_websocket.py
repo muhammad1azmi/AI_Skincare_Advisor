@@ -10,6 +10,7 @@ Prerequisites:
 
 import asyncio
 import json
+import os
 import subprocess
 import sys
 
@@ -111,8 +112,9 @@ async def test_websocket_connection():
     except Exception as e:
         print(f"\n❌ Connection failed: {e}")
         print("\nTroubleshooting:")
-        print(f"  1. Check service: gcloud run services describe skincare-advisor --region us-central1 --project boreal-graph-465506-f2")
-        print(f"  2. Check logs: gcloud logging read 'resource.labels.service_name=skincare-advisor' --limit=10 --project boreal-graph-465506-f2")
+        _proj = os.environ.get('GOOGLE_CLOUD_PROJECT', '<YOUR_PROJECT_ID>')
+        print(f"  1. Check service: gcloud run services describe skincare-advisor --region us-central1 --project {_proj}")
+        print(f"  2. Check logs: gcloud logging read 'resource.labels.service_name=skincare-advisor' --limit=10 --project {_proj}")
         print(f"  3. Test HTTP first: curl -H 'Authorization: Bearer TOKEN' https://{SERVICE_URL}/")
 
 

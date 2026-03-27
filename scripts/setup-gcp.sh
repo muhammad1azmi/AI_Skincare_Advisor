@@ -13,7 +13,7 @@
 
 set -euo pipefail
 
-PROJECT_ID="${GOOGLE_CLOUD_PROJECT:-boreal-graph-465506-f2}"
+PROJECT_ID="${GOOGLE_CLOUD_PROJECT:?Error: GOOGLE_CLOUD_PROJECT env var is not set}"
 REGION="${GOOGLE_CLOUD_LOCATION:-us-central1}"
 
 while [[ $# -gt 0 ]]; do

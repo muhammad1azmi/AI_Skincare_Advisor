@@ -32,7 +32,7 @@ jobs:
 
       - name: Run ADK Eval Tests
         env:
-          GOOGLE_CLOUD_PROJECT: boreal-graph-465506-f2
+          GOOGLE_CLOUD_PROJECT: ${{ secrets.GCP_PROJECT_ID }}
           GOOGLE_CLOUD_LOCATION: us-central1
           GOOGLE_GENAI_USE_VERTEXAI: "TRUE"
         run: |

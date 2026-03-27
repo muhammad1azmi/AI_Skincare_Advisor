@@ -123,8 +123,7 @@ web_app.add_middleware(
 )
 
 # --- BigQuery Agent Analytics Plugin ---
-_PROJECT_ID = os.environ.get("GOOGLE_CLOUD_PROJECT", "boreal-graph-465506-f2")
-_LOCATION = os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1")
+from server.config import PROJECT_ID as _PROJECT_ID, LOCATION as _LOCATION
 
 bq_config = BigQueryLoggerConfig(
     enabled=True,

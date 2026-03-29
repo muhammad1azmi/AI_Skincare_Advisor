@@ -39,8 +39,9 @@ _root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 load_dotenv(os.path.join(_root_dir, ".env"))
 load_dotenv(os.path.join(_root_dir, "app", ".env"))
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.requests import Request
 
 from google.adk.apps import App
 from google.adk.runners import Runner
@@ -63,7 +64,7 @@ trace.set_tracer_provider(TracerProvider())
 import sys
 sys.path.insert(0, os.path.join(_root_dir, "app"))
 from skincare_advisor.agent import root_agent
-from server.auth import verify_websocket_token
+from server.auth import verify_websocket_token, verify_firebase_token
 
 # --- Structured Logging ---
 _LOG_DIR = os.path.join(_root_dir, "logs")
@@ -121,6 +122,56 @@ web_app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["Content-Type", "Authorization"],
 )
+
+
+# ─── Security Headers Middleware ───
+# Protects against XSS, clickjacking, MIME sniffing, and downgrade attacks.
+@web_app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    return response
+
+
+# ─── SKIP_AUTH Production Safety Net ───
+# Prevents accidental auth bypass in non-dev environments (e.g. Cloud Run).
+_ENV = os.environ.get("ENV", "dev")
+_SKIP_AUTH = os.environ.get("SKIP_AUTH", "").lower() == "true"
+
+if _SKIP_AUTH and _ENV != "dev":
+    logger.critical(
+        "SECURITY: SKIP_AUTH=true is FORBIDDEN in non-dev environments. "
+        "Forcing authentication ON."
+    )
+    os.environ["SKIP_AUTH"] = "false"
+
+
+# ─── REST Endpoint Auth Dependency ───
+async def require_auth(authorization: str = Header(None)) -> dict:
+    """FastAPI dependency — requires a valid Firebase JWT.
+
+    Extracts the Bearer token from the Authorization header,
+    verifies it via Firebase Admin SDK, and returns the decoded user.
+    Raises HTTPException(401) on failure.
+    """
+    if os.environ.get("SKIP_AUTH", "").lower() == "true":
+        return {"uid": "local_dev_user", "email": "dev@local"}
+
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    token = authorization[7:]
+    user = verify_firebase_token(token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    return user
 
 # --- BigQuery Agent Analytics Plugin ---
 from server.config import PROJECT_ID as _PROJECT_ID, LOCATION as _LOCATION
@@ -202,6 +253,13 @@ _rate_limits: dict[str, collections.deque] = {}
 _RATE_LIMIT_WINDOW = 60  # seconds
 _RATE_LIMIT_MAX_MESSAGES = 30  # max text messages per window
 
+# ─── Payload Size Limits ───
+# Prevent memory exhaustion and abuse via oversized payloads.
+_MAX_TEXT_LENGTH = 5_000           # max chars per text message
+_MAX_IMAGE_B64_SIZE = 10_000_000   # ~10 MB base64 ≈ 7.5 MB decoded
+_MAX_AUDIO_CHUNK_SIZE = 1_000_000  # ~1 MB PCM ≈ 30s at 16kHz/16-bit
+_ALLOWED_IMAGE_MIMES = {"image/jpeg", "image/png", "image/webp"}
+
 # In-memory storage for FCM tokens (use Firestore in production)
 fcm_tokens: dict[str, str] = {}  # user_id -> fcm_token
 
@@ -221,61 +279,50 @@ async def shutdown_event():
 
 @web_app.get("/")
 async def health_check():
-    """Enriched health check — verifies system readiness."""
+    """Minimal health check — no internal architecture details exposed."""
     return {
         "status": "healthy",
         "app": "AI Skincare Advisor",
         "version": "1.0.0",
-        "model": root_agent.model,
-        "session_service": type(session_service).__name__,
-        "memory_service": type(memory_service).__name__,
-        "mode": "agent_engine" if _AGENT_ENGINE_ID else "local_dev",
-        "agent_engine_id": _AGENT_ENGINE_ID or "not_set",
-        "plugins": ["BigQueryAgentAnalyticsPlugin"],
-        "active_sessions": len(active_queues),
-        "agents": [
-            "skincare_advisor (root orchestrator)",
-            "skin_analyzer (vision + FunctionTool)",
-            "routine_builder (VertexAiSearchTool)",
-            "ingredient_checker (VertexAiSearchTool)",
-            "ingredient_interaction_agent (VertexAiSearchTool)",
-            "skin_condition_agent (VertexAiSearchTool)",
-            "qa_agent (VertexAiSearchTool)",
-            "kol_content_agent (VertexAiSearchTool)",
-            "progress_tracker (FunctionTool)",
-        ],
-        "grounding": "Vertex AI Search datastores (5 agents)",
-        "safety": "Model Armor (PI, PII/SDP, RAI, malicious URIs) + medical guardrail",
     }
 
 
 @web_app.post("/api/register-token")
-async def register_fcm_token(data: dict):
+async def register_fcm_token(data: dict, user: dict = Depends(require_auth)):
     """Register a device FCM token for push notifications.
 
     Body: {"user_id": "...", "token": "..."}
+    Requires: Authorization: Bearer <firebase_jwt>
     """
     user_id = data.get("user_id")
     token = data.get("token")
     if not user_id or not token:
-        return {"error": "user_id and token required"}, 400
+        raise HTTPException(status_code=400, detail="user_id and token required")
+    # Users can only register tokens for themselves
+    if user["uid"] != user_id:
+        raise HTTPException(status_code=403, detail="Cannot register token for another user")
     fcm_tokens[user_id] = token
     logger.info(f"FCM token registered for user {user_id}")
     return {"status": "ok"}
 
 
 @web_app.post("/api/send-notification")
-async def send_push_notification(data: dict):
+async def send_push_notification(data: dict, user: dict = Depends(require_auth)):
     """Send a push notification to a user.
 
     Body: {"user_id": "...", "title": "...", "body": "...", "data": {...}}
+    Requires: Authorization: Bearer <firebase_jwt>
+    Users can only send notifications to themselves.
     """
     from server.notifications import send_notification
 
     user_id = data.get("user_id")
+    # Users can only send notifications to themselves
+    if user["uid"] != user_id:
+        raise HTTPException(status_code=403, detail="Cannot send notifications to another user")
     token = fcm_tokens.get(user_id)
     if not token:
-        return {"error": "No FCM token registered for user"}
+        raise HTTPException(status_code=404, detail="No FCM token registered for user")
 
     result = await send_notification(
         token=token,
@@ -287,18 +334,14 @@ async def send_push_notification(data: dict):
 
 
 @web_app.get("/api/sessions/{user_id}")
-async def list_user_sessions(user_id: str, token: str = ""):
-    """List all past sessions for a user."""
-    # Skip auth in local dev
-    if os.environ.get("SKIP_AUTH", "").lower() != "true":
-        if not token:
-            return {"error": "Authentication required"}, 401
-        from server.auth import verify_firebase_token
-        firebase_user = verify_firebase_token(token)
-        if firebase_user is None:
-            return {"error": "Invalid or expired token"}, 401
-        if firebase_user["uid"] != user_id:
-            return {"error": "Forbidden"}, 403
+async def list_user_sessions(user_id: str, user: dict = Depends(require_auth)):
+    """List all past sessions for a user.
+
+    Requires: Authorization: Bearer <firebase_jwt>
+    Users can only list their own sessions.
+    """
+    if user["uid"] != user_id:
+        raise HTTPException(status_code=403, detail="Cannot access another user's sessions")
 
     try:
         sessions = await session_service.list_sessions(
@@ -337,8 +380,16 @@ async def list_user_sessions(user_id: str, token: str = ""):
 
 
 @web_app.post("/api/trigger-reminders")
-async def trigger_reminders(data: dict = {}):
-    """Trigger routine reminders and personalized product deals for all users."""
+async def trigger_reminders(data: dict = {}, user: dict = Depends(require_auth)):
+    """Trigger routine reminders and personalized product deals for all users.
+
+    Admin-only endpoint — only the app owner can trigger mass notifications.
+    Requires: Authorization: Bearer <firebase_jwt>
+    """
+    # Admin check: restrict to specific admin UID(s)
+    _ADMIN_UIDS = os.environ.get("ADMIN_UIDS", "").split(",")
+    if user["uid"] not in _ADMIN_UIDS and _ADMIN_UIDS != [""]:
+        raise HTTPException(status_code=403, detail="Admin access required")
     from server.notifications import (
         send_routine_reminder,
         send_product_discount,
@@ -413,6 +464,19 @@ async def websocket_streaming(websocket: WebSocket, user_id: str, session_id: st
         return
 
     authenticated_user_id = firebase_user["uid"]
+
+    # ─── User ID Path Enforcement ───
+    # Prevent authenticated user A from connecting to /ws/userB/session.
+    # The URL path user_id MUST match the JWT uid.
+    if authenticated_user_id != user_id and os.environ.get("SKIP_AUTH", "").lower() != "true":
+        logger.warning(
+            f"Session {session_id}: UID MISMATCH — "
+            f"path={user_id} jwt={authenticated_user_id}. Rejecting."
+        )
+        await websocket.accept()
+        await websocket.close(code=4003, reason="User ID mismatch")
+        return
+
     logger.info(f"Session {session_id}: Auth OK for {authenticated_user_id}, accepting WebSocket...")
     await websocket.accept()
     logger.info(f"Session {session_id}: WebSocket accepted for user {authenticated_user_id}")
@@ -485,6 +549,10 @@ async def websocket_streaming(websocket: WebSocket, user_id: str, session_id: st
                 while True:
                     message = await websocket.receive()
                     if "bytes" in message:
+                        # ── Audio size validation ──
+                        if len(message["bytes"]) > _MAX_AUDIO_CHUNK_SIZE:
+                            logger.warning(f"Session {session_id}: Oversized audio chunk ({len(message['bytes'])} bytes), dropping")
+                            continue
                         audio_chunk_count += 1
                         if audio_chunk_count <= 3:
                             logger.debug(f"Audio chunk #{audio_chunk_count} size={len(message['bytes'])} bytes")
@@ -499,6 +567,10 @@ async def websocket_streaming(websocket: WebSocket, user_id: str, session_id: st
                         if msg_type == "text":
                             user_text = json_message.get("text", "").strip()
                             if not user_text:
+                                continue
+                            # ── Text length validation ──
+                            if len(user_text) > _MAX_TEXT_LENGTH:
+                                await websocket.send_text(json.dumps({"error": "message_too_long", "max": _MAX_TEXT_LENGTH}))
                                 continue
                             now = time.monotonic()
                             if session_id not in _rate_limits:
@@ -515,8 +587,17 @@ async def websocket_streaming(websocket: WebSocket, user_id: str, session_id: st
                         elif msg_type == "image":
                             raw_data = json_message.get("data")
                             if raw_data:
+                                # ── Image size validation ──
+                                if len(raw_data) > _MAX_IMAGE_B64_SIZE:
+                                    await websocket.send_text(json.dumps({"error": "image_too_large", "max_mb": 10}))
+                                    continue
+                                # ── Image MIME type validation ──
+                                mime = json_message.get("mimeType", "image/jpeg")
+                                if mime not in _ALLOWED_IMAGE_MIMES:
+                                    await websocket.send_text(json.dumps({"error": "unsupported_image_type", "allowed": list(_ALLOWED_IMAGE_MIMES)}))
+                                    continue
                                 image_blob = types.Blob(
-                                    mime_type=json_message.get("mimeType", "image/jpeg"),
+                                    mime_type=mime,
                                     data=base64.b64decode(raw_data),
                                 )
                                 live_request_queue.send_realtime(image_blob)

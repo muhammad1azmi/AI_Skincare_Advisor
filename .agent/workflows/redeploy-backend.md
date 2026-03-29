@@ -37,7 +37,7 @@ If the output is empty — no errors, deploy is healthy.
 
 4. Deploy the WebSocket server to Cloud Run:
 ```powershell
-gcloud run deploy skincare-advisor --project=boreal-graph-465506-f2 --region=us-central1 --source=. --allow-unauthenticated --set-env-vars="GOOGLE_CLOUD_PROJECT=boreal-graph-465506-f2,GOOGLE_CLOUD_LOCATION=us-central1,AGENT_ENGINE_ID=8778253446047334400,MODEL_ARMOR_TEMPLATE_ID=skincare-advisor-safety,MODEL_ARMOR_LOCATION=us-central1,SKIP_AUTH=true"
+gcloud run deploy skincare-advisor --project=boreal-graph-465506-f2 --region=us-central1 --source=. --allow-unauthenticated --set-env-vars="GOOGLE_CLOUD_PROJECT=boreal-graph-465506-f2,GOOGLE_CLOUD_LOCATION=us-central1,AGENT_ENGINE_ID=8778253446047334400,MODEL_ARMOR_TEMPLATE_ID=skincare-advisor-safety,MODEL_ARMOR_LOCATION=us-central1,ENV=production,ADMIN_UIDS=GNokVNMwVJYClJGaW22ggf4AKH43"
 ```
 
 ## What the CLI Does
